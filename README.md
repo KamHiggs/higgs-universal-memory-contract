@@ -1,6 +1,28 @@
 # Higgs Universal Memory Contract (UMC)
 Version: v0.9-core  
 Status: Draft-Stable  
+
+## Get Started Fast
+
+- **Run it locally in 5 minutes:**  
+  See [QUICKSTART.md](./QUICKSTART.md) for how to launch the UMC memory server with FastAPI, send it `STATE_UPDATE` / `SAVE_NOTE`, and retrieve `<RETRIEVED_CONTEXT>...</RETRIEVED_CONTEXT>` with curl.
+
+- **Make your AI speak UMC natively:**  
+  See [prompts/umc_system_prompt.md](./prompts/umc_system_prompt.md) for the system prompt that teaches any assistant (Claude, GPT, local models, etc.) to:  
+  - emit `STATE_UPDATE` and `SAVE_NOTE` after important decisions  
+  - call `REQUEST_CONTEXT` instead of guessing  
+  - respect `session_id` boundaries and “do not store this”
+
+- **Reference middleware (memory you control):**  
+  See [middleware/umc_memory_server.py](./middleware/umc_memory_server.py) for the lightweight FastAPI server that:  
+  - stores project-scoped memory by `session_id`  
+  - returns `<RETRIEVED_CONTEXT>` blocks on request  
+  - keeps an audit trail of what was decided, when, and why  
+
+UMC is memory infrastructure you control — not memory locked inside a vendor.
+
+
+
 Maintainers: Kamden Higgs • Higgs AI
 
 ## What This Is
