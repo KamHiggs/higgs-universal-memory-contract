@@ -127,3 +127,17 @@ User ↔ Assistant
   REQUEST_CONTEXT (assistant asks host to retrieve what it needs)
         ↓
    <RETRIEVED_CONTEXT> block feeds back into assistant
+
+---
+
+## Contact / Attribution
+
+**Higgs Universal Memory Contract (UMC)**  
+Created by Kamden Higgs • Higgs AI
+
+UMC is an open, model-agnostic memory protocol for AI assistants and agent systems.  
+It defines session-scoped memory (`session_id`), consent-aware retention (`scope`: permanent | project | temporary), and machine-readable handoff signals (`STATE_UPDATE`, `SAVE_NOTE`, `REQUEST_CONTEXT`) to prevent cross-client data leaks and create auditable AI behavior.
+
+This work is published under the Apache 2.0 License.
+
+If you're implementing UMC in assistants, multi-agent workflows, or enterprise environments and want to align on interoperability or governance, reach out.
