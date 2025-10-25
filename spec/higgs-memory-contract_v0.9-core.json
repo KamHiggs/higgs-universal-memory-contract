@@ -1,0 +1,226 @@
+{
+  "metadata": {
+    "framework_name": "Higgs Universal Memory Contract (UMC)",
+    "short_name": "higgs-memory-contract",
+    "version": "0.9-core",
+    "status": "DRAFT-STABLE",
+    "maintainers": ["Kamden Higgs", "Higgs AI"],
+    "license_recommendation": "Apache-2.0",
+    "purpose": "Provide a model-agnostic, auditable, scoped memory protocol for LLM assistants, multi-agent systems, and human-in-the-loop workflows.",
+    "goals": [
+      "Continuity across sessions and models",
+      "Safe retention (no oversharing, no bleed)",
+      "Project-scoped recall with consent",
+      "Machine-readable handoff between agents",
+      "Enterprise-grade auditability"
+    ],
+    "non_goals": [
+      "Training data policy for model providers",
+      "Fine-tuning weights",
+      "Embedding store schema (left to implementers)"
+    ]
+  },
+
+  "core_concepts": {
+    "sticky_memory": "Information that should persist across topic shifts because it defines goals, constraints, project state, tone preferences, or critical facts.",
+    "working_memory": "The most recent live context required to answer right now. Ephemeral.",
+    "state_update": "A structured summary of what was just decided, what's done, and what's next.",
+    "save_note": "A structured request from the assistant to persist something into long-term memory.",
+    "request_context": "A structured request from the assistant to retrieve missing context (plans, glossary, etc.) from storage.",
+    "session_id": "A required identifier that binds memory and actions to a specific project / engagement / workspace.",
+    "scope": "Retention class for memory items: 'permanent', 'project', or 'temporary'."
+  },
+
+  "privacy_and_safety_policy": {
+    "description": "Rules that govern what may and may not be persisted or recalled.",
+    "never_persist_raw": [
+      "Passwords, private keys, authentication tokens",
+      "Direct financial instrument numbers (credit cards, bank routing/account numbers)",
+      "Government ID numbers and protected identifiers",
+      "Medical or diagnostic details unless user explicitly says to store",
+      "Full legal case text, contracts, or sensitive dispute wording without explicit consent"
+    ],
+    "sensitive_summarization_rule": "If the user discusses sensitive material, summarize only at a high level (e.g. 'The user has an active legal deadline in mid-November') instead of including verbatim legal/financial/medical/relationship content.",
+    "consent_rule": "The assistant must request confirmation before persisting any sensitive or permanent sticky memory (scope 'permanent').",
+    "incognito_mode": {
+      "trigger": "If the user says 'do not store this', 'off the record', 'private', or marks content as PRIVATE.",
+      "behavior": "The assistant must not emit SAVE_NOTE for that content, and must not include that content in STATE_UPDATE beyond an abstract placeholder.",
+      "disclosure": "The assistant should acknowledge: 'Understood. I will not store this or include it in future summaries.'"
+    }
+  },
+
+  "memory_contract": {
+    "working_memory_policy": {
+      "rolling_window": {
+        "rule": "Maintain the most recent 8 user+assistant turns verbatim.",
+        "reason": "Guarantees local detail accuracy."
+      },
+      "compression_of_older_context": {
+        "rule": "All dialogue older than the rolling window must be compressed into a running summary that preserves: decisions made, commitments, blockers, deadlines, open questions.",
+        "anchors": "If a stable fact is established, restate it as an ANCHOR line and include that ANCHOR verbatim in all future summaries."
+      },
+      "anchor_statements": {
+        "format": "ANCHOR: <fact>",
+        "examples": [
+          "ANCHOR: The project codename is 'Vibranium Protocol'.",
+          "ANCHOR: The user prefers direct, candid tone and hates marketing fluff.",
+          "ANCHOR: The delivery deadline is November 12, 2025 for Pitch Deck v1."
+        ],
+        "immutability": "Anchors must never be silently altered. If an anchor changes, emit a new anchor with UPDATED_ANNOTATION (see conflict_resolution)."
+      }
+    },
+
+    "sticky_memory_rules": {
+      "definition": "Sticky memory is information that persists across topic changes and future sessions for this session_id.",
+      "categories": [
+        "User goals and success criteria (what 'good' looks like)",
+        "Constraints and non-negotiables (budget limits, tech bans, tone requirements)",
+        "Project state (what we're building, current status, next required action)",
+        "Deadlines / timelines / milestones",
+        "User style preferences (tone, verbosity, formatting)"
+      ],
+      "protection": "Sticky memory MUST NOT be discarded unless the user explicitly revokes or replaces it.",
+      "lifecycle_tagging": {
+        "scope_values": ["permanent", "project", "temporary"],
+        "rules": {
+          "permanent": "Long-term identity / preference info the user wants remembered across future sessions.",
+          "project": "Active until this session_id / engagement is complete, then should be archived or retired.",
+          "temporary": "Useful only for the immediate task; should expire after task completion or '[RESET]'."
+        }
+      }
+    },
+
+    "forgetfulness_control": {
+      "selective_discard": "Details that are resolved, rejected, or no longer relevant must be dropped from working memory and retained only as a 1-line outcome summary inside the running summary.",
+      "reset_cue": {
+        "trigger": "The user types '[RESET]'.",
+        "behavior": "Clear all temporary context and working memory summaries. Retain only sticky memory with scope != 'temporary'. Then restate known sticky memory at the top of the next response along with 'Context reset complete.'."
+      },
+      "deprioritize_noise": "Do not carry forward exploratory dead-ends, jokes, or unapproved brainstorm fragments unless the user tags them as IMPORTANT or asks to store them."
+    },
+
+    "external_memory_interface": {
+      "save_signal": {
+        "description": "Assistant asks host system to persist critical info.",
+        "schema": {
+          "type": "SAVE_NOTE",
+          "session_id": "string",
+          "scope": "permanent | project | temporary",
+          "fact": "string",
+          "reason": "string (why it matters / why we are saving it)"
+        },
+        "example": {
+          "type": "SAVE_NOTE",
+          "session_id": "vibranium-protocol-R1",
+          "scope": "project",
+          "fact": "The client requires on-prem deployment, no public cloud.",
+          "reason": "Must influence all architectural decisions."
+        }
+      },
+      "retrieve_signal": {
+        "description": "Assistant requests relevant stored context (plans, glossary, last milestone) from host.",
+        "schema": {
+          "type": "REQUEST_CONTEXT",
+          "session_id": "string",
+          "topic": "string (what context is needed)"
+        },
+        "example": {
+          "type": "REQUEST_CONTEXT",
+          "session_id": "vibranium-protocol-R1",
+          "topic": "Most recent STATE_UPDATE and milestone deadlines"
+        }
+      },
+      "integration_rule": "If external memory is provided back to the assistant using a <RETRIEVED_CONTEXT>...</RETRIEVED_CONTEXT> block, the assistant must treat that block as authoritative unless the user corrects it."
+    },
+
+    "context_efficiency": {
+      "proactive_state_update": {
+        "rule": "After any major decision, delivery, or milestone, the assistant MUST emit a STATE_UPDATE block.",
+        "schema": {
+          "type": "STATE_UPDATE",
+          "session_id": "string",
+          "summary": "string (what was decided / delivered)",
+          "next_steps": ["string"],
+          "blockers": ["string"],
+          "deadline": "string or null"
+        },
+        "example": {
+          "type": "STATE_UPDATE",
+          "session_id": "vibranium-protocol-R1",
+          "summary": "We finalized the memory governance terms for the enterprise pitch.",
+          "next_steps": ["Generate slide on auditability", "Attach compliance language"],
+          "blockers": ["Need legal wording for data retention"],
+          "deadline": "2025-11-12"
+        }
+      },
+      "no_redundancy": "Do not restate full instructions if they already exist in the latest STATE_UPDATE or in anchors.",
+      "minimal_carryover": "When the user starts a new request within the same session_id, carry forward only sticky memory (non-temporary) plus the most recent STATE_UPDATE. Do not drag raw past chat unless explicitly asked."
+    },
+
+    "self_check_and_clarity": {
+      "integrity_check": "If you are unsure because past info may have been summarized or forgotten, ask: 'I currently have <X>. Is that still correct?' before acting.",
+      "no_hallucination_rule": "Never invent missing steps, deadlines, or constraints. If context is missing, emit REQUEST_CONTEXT.",
+      "conflict_resolution": {
+        "rule": "If the user contradicts stored memory, user input overrides prior memory.",
+        "behavior": [
+          "Acknowledge correction",
+          "Issue a new ANCHOR with UPDATED_ANNOTATION",
+          "Emit SAVE_NOTE with reason 'memory correction' so future recalls are aligned"
+        ],
+        "anchor_update_example": "ANCHOR_UPDATED: The delivery deadline moved to November 20, 2025 (was November 12, 2025)."
+      }
+    }
+  },
+
+  "assistant_runtime_behavior": {
+    "on_new_topic": "At the start of a new request (same session_id), restate the latest STATE_UPDATE summary and relevant sticky memory so the user sees what you think the current plan is.",
+    "after_major_decision": "Immediately emit STATE_UPDATE, then emit SAVE_NOTE entries for any new sticky memory items or changed anchors. Ask the user to confirm retention scope (permanent / project / temporary).",
+    "after_reset": "When the user types '[RESET]', clear all temporary scope memory and working context. Then restate surviving sticky memory and ask: 'Where would you like to go from here?'"
+  },
+
+  "protocol_examples": {
+    "full_cycle_demo": {
+      "1_user_goal": "Build an investor deck for Project Vibranium by Nov 12, 2025.",
+      "2_assistant_sets_anchor": [
+        "ANCHOR: Project name is 'Vibranium Protocol'.",
+        "ANCHOR: Deadline for investor deck draft is November 12, 2025.",
+        "ANCHOR: Tone must be direct, technical, no hype language."
+      ],
+      "3_state_update": {
+        "type": "STATE_UPDATE",
+        "session_id": "vibranium-protocol-R1",
+        "summary": "We defined the core pitch message (AI sovereignty + auditability).",
+        "next_steps": ["Draft slide on audit log transparency", "Draft licensing terms"],
+        "blockers": ["Need legal positioning for compliance"],
+        "deadline": "2025-11-12"
+      },
+      "4_save_note": {
+        "type": "SAVE_NOTE",
+        "session_id": "vibranium-protocol-R1",
+        "scope": "project",
+        "fact": "The client forbids deployment on public cloud; they require self-hosted or on-prem.",
+        "reason": "Affects all infrastructure language in the deck."
+      },
+      "5_request_context": {
+        "type": "REQUEST_CONTEXT",
+        "session_id": "vibranium-protocol-R1",
+        "topic": "Latest approved messaging about compliance / auditability"
+      },
+      "6_integrity_check_prompt": "I currently have on record that you're positioning Vibranium Protocol as 'AI sovereignty with verifiable audit trails for government and finance clients'. Is that still correct?"
+    }
+  },
+
+  "roadmap": {
+    "v1.0": [
+      "Add automated retention timers for 'temporary' scope notes (auto-expire after task close)",
+      "Add explicit 'ownership / IP' clauses in SAVE_NOTE for consulting scenarios",
+      "Add org-level policy pack: block cross-pollination of session_id data unless user says 'share across projects'",
+      "Provide starter middleware that listens for SAVE_NOTE / REQUEST_CONTEXT and writes/reads from a vector DB or Postgres"
+    ],
+    "enterprise_extensions": [
+      "Admin audit trail of all STATE_UPDATE and SAVE_NOTE messages, with timestamps and author (assistant vs user)",
+      "Encryption / redaction policies before long-term persistence",
+      "Per-session_id export for legal discovery / SOC2 evidence"
+    ]
+  }
+}
