@@ -1,0 +1,18 @@
+{
+  "pack_id": "PACK:ai-compliance-navigator",
+  "pack_version": "1.0.0",
+  "bridgeforge_version": "BF:ga-plus-1.1.0",
+  "case_id": "EVAL:case:stale-evidence",
+  "generated_at": "2026-01-09T15:45:00-08:00",
+  "status": "BLOCKED",
+  "block_reason": "stale_evidence",
+  "disclaimer": "Not legal advice. Block indicates deterministic enforcement triggered.",
+  "contents": [
+    "00_intake_normalized.json",
+    "01_tier_decision.json",
+    "04_citation_block.json",
+    "05_evidence_block.json",
+    "07_validator_report.json",
+    "08_umc_event_chain_export.json"
+  ]
+}

@@ -1,0 +1,63 @@
+{
+  "UMC_EXPORT": {
+    "chain_id": "UMC:chain:hr-hiring-eu:2026-01-09:0001",
+    "integrity": {
+      "hash_algorithm": "sha256",
+      "root_hash": "sha256:PLACEHOLDER",
+      "signatures": ["sig:PLACEHOLDER"]
+    },
+    "events": [
+      {
+        "event_id": "UMC:event:0001",
+        "type": "umc.gi_run_started",
+        "ts": "2026-01-09T15:00:01-08:00",
+        "payload_hash": "sha256:PLACEHOLDER"
+      },
+      {
+        "event_id": "UMC:event:0002",
+        "type": "umc.gi_draft_A",
+        "ts": "2026-01-09T15:00:08-08:00",
+        "payload_hash": "sha256:PLACEHOLDER"
+      },
+      {
+        "event_id": "UMC:event:0003",
+        "type": "umc.gi_draft_B",
+        "ts": "2026-01-09T15:00:12-08:00",
+        "payload_hash": "sha256:PLACEHOLDER"
+      },
+      {
+        "event_id": "UMC:event:0004",
+        "type": "umc.gi_disagreement_map",
+        "ts": "2026-01-09T15:00:14-08:00",
+        "payload_hash": "sha256:PLACEHOLDER"
+      },
+      {
+        "event_id": "UMC:event:0005",
+        "type": "umc.escalation_created",
+        "ts": "2026-01-09T15:00:16-08:00",
+        "payload": { "target": "ComplianceLead", "reason": "high_risk_confidence_gate" },
+        "payload_hash": "sha256:PLACEHOLDER"
+      },
+      {
+        "event_id": "UMC:event:0006",
+        "type": "umc.review_signed_off",
+        "ts": "2026-01-09T15:08:44-08:00",
+        "payload": {
+          "decision": "ApproveWithConditions",
+          "conditions": [
+            "No auto-reject without meaningful human review until oversight + logging controls implemented",
+            "Bias/fairness evaluation suite must be completed before scaling",
+            "Model SBOM required before scaling"
+          ]
+        },
+        "payload_hash": "sha256:PLACEHOLDER"
+      },
+      {
+        "event_id": "UMC:event:0007",
+        "type": "umc.validation_passed",
+        "ts": "2026-01-09T15:08:52-08:00",
+        "payload_hash": "sha256:PLACEHOLDER"
+      }
+    ]
+  }
+}

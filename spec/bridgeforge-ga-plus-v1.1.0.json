@@ -1,0 +1,733 @@
+{
+  "metadata": {
+    "id": "GM:bridgeforge-ga-plus-v1.1.0-HIGGS",
+    "name": "BridgeForge GA+ — Governed, Auditable High-Stakes Translation Factory (with Proof, Validators, and Compounding Moat)",
+    "version": "1.1.0",
+    "status": "GA+:PRODUCTION-GRADE",
+    "authors": ["Kamden Higgs (Higgs AI)", "Solara Higgs"],
+    "created_at": "2026-01-09T00:00:00-08:00",
+    "updated_at": "2026-01-09T00:00:00-08:00",
+    "classification": "HIGGS_STRATEGIC",
+    "purpose": "Factory for vertical AI products whose core value is cross-domain translation under governance constraints: ingestion→ontology→translation→consensus→validation→docs→audit export→continuous improvement.",
+    "core_claim": "We don't sell 'answers'. We sell defensible decisions: traced to authority, backed by evidence, fail-closed, and reviewable.",
+    "id_grammar": "^(GM|BF|PACK|MOD|REG|CITE|EVID|ONTO|UI|UMC|EVAL|DOC|OPS|SEC|THRT|GTM|DATA):[A-Za-z0-9\\-_.:]+$",
+    "design_axioms": [
+      "High-stakes outputs must be governed by enforcement, not trust.",
+      "Split stable authority (CITATION_BLOCK) from volatile facts (EVIDENCE_BLOCK).",
+      "Fail closed on missing authority/evidence, low confidence, stale evidence, or material disagreement.",
+      "HITL must be ergonomic and writes back to the audit trail.",
+      "Every correction becomes a regression test; quality compounds.",
+      "Compliance is probabilistic → governance is deterministic."
+    ]
+  },
+
+  "claude_redteam_response_matrix": {
+    "vaporware_governed_inference": {
+      "critique": "Architecture documented but not implemented.",
+      "patch": ["MOD:governed-inference-mvp", "MOD:output-validation-layer", "UMC:event_chain_spec"],
+      "proof_artifacts": ["EVAL:suite:gi-consensus-behavior", "DOC:gi-mvp-spec", "UMC:export:gi-run"]
+    },
+    "n1_evidence_problem": {
+      "critique": "Single data point, no quantified measurement.",
+      "patch": ["MOD:benchmark-harness", "MOD:gold-standard-harvester"],
+      "proof_artifacts": ["DOC:benchmark-methodology", "EVAL:dataset:100plus", "DOC:results-report-template"]
+    },
+    "silent_governance_bypass": {
+      "critique": "LLMs may ignore governance under adversarial prompting.",
+      "patch": ["MOD:output-validation-layer", "THRT:prompt-injection-defense", "MOD:policy-as-code-gates"],
+      "proof_artifacts": ["EVAL:suite:injection-resistance", "DOC:validator-rulebook"]
+    },
+    "stale_evidence_risk": {
+      "critique": "TTL needs enforcement + monitoring.",
+      "patch": ["OPS:ttl-enforcement-monitoring", "OPS:evidence-refresh-canary"],
+      "proof_artifacts": ["UMC:event:evid_refresh", "EVAL:suite:stale-evidence-fail-closed"]
+    },
+    "reviewer_fatigue": {
+      "critique": "HITL fatigue can degrade safety.",
+      "patch": ["UI:reviewer-workbench", "MOD:triage-and-queueing", "MOD:confidence-calibration"],
+      "proof_artifacts": ["DOC:reviewer-ux-spec", "EVAL:suite:reviewer-load"]
+    },
+    "bus_factor_1": {
+      "critique": "Single founder risk + knowledge bottleneck.",
+      "patch": ["DOC:authoring-playbook", "DOC:pack-factory-sop", "GTM:partner-channel-plan"],
+      "proof_artifacts": ["DOC:onboarding-kit", "DOC:contributor-protocol"]
+    },
+    "maintenance_burden": {
+      "critique": "Quality decays as maps multiply.",
+      "patch": ["MOD:gold-standard-harvester", "OPS:release-channels", "OPS:content-pack-versioning", "MOD:physarum-metabolism-hooks"],
+      "proof_artifacts": ["EVAL:regression-growth-metrics", "DOC:release-and-rollback"]
+    }
+  },
+
+  "kernel": {
+    "id": "BF:kernel",
+    "modules": [
+      "MOD:ingestion-normalization",
+      "MOD:ontology-registry",
+      "MOD:bridge-translation-core",
+      "MOD:dual-registry-authority-evidence",
+      "MOD:governed-inference-mvp",
+      "MOD:output-validation-layer",
+      "MOD:policy-as-code-gates",
+      "MOD:doc-generation-templates",
+      "MOD:umc-audit-trail",
+      "UI:reviewer-workbench",
+      "MOD:triage-and-queueing",
+      "MOD:confidence-calibration",
+      "MOD:benchmark-harness",
+      "MOD:gold-standard-harvester",
+      "OPS:ttl-enforcement-monitoring",
+      "OPS:release-channels-and-rollbacks",
+      "OPS:evidence-refresh-canary",
+      "THRT:prompt-injection-defense",
+      "SEC:privacy-security-baseline",
+      "DATA:evidence-graph-and-assurance-case"
+    ]
+  },
+
+  "MOD:ingestion-normalization": {
+    "mission": "Turn messy reality into clean pack intake schemas with provenance and confidence gating.",
+    "artifact_types": [
+      "pdf_contract",
+      "policy_guidance_pdf",
+      "model_card_or_tech_doc",
+      "audit_log_export",
+      "jira_or_ticket_export",
+      "email_thread",
+      "scanned_doc_requires_ocr",
+      "spreadsheet",
+      "web_page_capture"
+    ],
+    "pipeline": [
+      "Artifact classification",
+      "Text extraction OR OCR (quality_score required)",
+      "Chunking (chunk_size, overlap, chunk_ids)",
+      "Entity extraction (actors, systems, controls, dates, obligations)",
+      "Schema mapping (pack intake_schema)",
+      "Confidence scoring per field + per claim",
+      "Confirm-required questions for critical gaps",
+      "Provenance map (field/claim -> [artifact_id, chunk_id, offsets])"
+    ],
+    "fail_safes": [
+      "If OCR quality_score < 0.70 => critical fields require confirmation",
+      "If pack-critical fields missing => classification must return NEEDS_MORE_INFO",
+      "If a claim cannot be supported by provenance => it cannot be emitted as final"
+    ],
+    "output_contract": {
+      "normalized_intake": "json",
+      "confidence_by_field": "map(field->0..1)",
+      "open_questions": "array",
+      "provenance_map": "map(field_or_claim->[artifact_id,chunk_id,offsets])",
+      "redaction_report": "PII classes detected + treatment actions"
+    }
+  },
+
+  "MOD:ontology-registry": {
+    "mission": "Prevent drift and hallucinated equivalence via a versioned Rosetta Stone.",
+    "registry_id": "REG:cross-domain-ontology",
+    "entry_schema": {
+      "id": "ONTO:*",
+      "source_term": "string",
+      "source_domain": "string",
+      "target_term": "string",
+      "target_domain": "string",
+      "mapping_type": "enum(exact,narrower,broader,related,disputed)",
+      "scope_notes": "string",
+      "criticality": "enum(low,high)",
+      "status": "enum(active,deprecating,deprecated)",
+      "introduced_in_version": "string",
+      "reviewer_signoff_required": "boolean"
+    },
+    "governance": {
+      "high_criticality_rule": "criticality=high => reviewer_signoff_required=true",
+      "umc_events": ["umc.ontology_update", "umc.ontology_deprecate"]
+    }
+  },
+
+  "MOD:dual-registry-authority-evidence": {
+    "purpose": "Hard firewall between stable authority and volatile facts.",
+    "registries": {
+      "CITATION_BLOCK": {
+        "definition": "Stable authority: laws, regs, standards, official guidance, internal policies.",
+        "entry_schema": {
+          "id": "CITE:*",
+          "title": "string",
+          "authority_type": "enum(statute,regulation,standard,official_guidance,policy)",
+          "jurisdiction": "string",
+          "canonical_ref": "string",
+          "url": "string",
+          "effective_date": "string",
+          "version": "string",
+          "hash": "sha256",
+          "excerpt_leq_25_words": "string"
+        },
+        "rules": [
+          "All obligation/legal claims MUST reference >=1 CITE:*",
+          "No fees/dates/form versions in CITATION_BLOCK"
+        ]
+      },
+      "EVIDENCE_BLOCK": {
+        "definition": "Volatile facts: enforcement pages, dates, fees, form versions, agency bulletins, current guidance pages.",
+        "entry_schema": {
+          "id": "EVID:*",
+          "title": "string",
+          "url": "string",
+          "retrieved_at": "iso8601",
+          "ttl_days": "int",
+          "content_hash": "sha256",
+          "snippet_leq_50_words": "string"
+        },
+        "rules": [
+          "All volatile facts MUST reference >=1 EVID:*",
+          "Must include retrieved_at + ttl_days + content_hash",
+          "Stale evidence => BLOCKED when referenced by final outputs"
+        ]
+      },
+      "ONTOLOGY_BLOCK": {
+        "definition": "Cross-domain term mappings (see MOD:ontology-registry).",
+        "entry_schema_ref": "REG:cross-domain-ontology.entry_schema"
+      }
+    }
+  },
+
+  "MOD:bridge-translation-core": {
+    "mission": "Render the same claim set across roles without changing meaning; bind each obligation to actions + artifacts.",
+    "roles": ["Engineer", "LegalCounsel", "RiskOfficer", "Auditor", "Executive"],
+    "translation_layers": [
+      {
+        "layer": "L1:Normalize",
+        "rules": [
+          "Use ONTOLOGY_BLOCK mappings when available.",
+          "If mapping_type=disputed AND criticality=high => HUMAN_REVIEW_REQUIRED."
+        ]
+      },
+      {
+        "layer": "L2:RoleRender",
+        "rules": [
+          "Engineer => controls + implementation steps + owners",
+          "Legal => obligations + authority anchors + scope boundaries",
+          "Risk => risk register + mitigations + residual risk",
+          "Auditor => evidence chain + reproducibility + exports",
+          "Executive => exposure + roadmap + cost/effort bands"
+        ]
+      },
+      {
+        "layer": "L3:ActionBinding",
+        "rule": "Each obligation -> {control, artifact, owner, deadline, verification_test}."
+      }
+    ]
+  },
+
+  "MOD:governed-inference-mvp": {
+    "mission": "Implement 2-model consensus with disagreement routing, conservative merge, and full audit trace.",
+    "models": ["MODEL_A", "MODEL_B"],
+    "decision_modes": ["UNANIMOUS", "HUMAN_REVIEW_REQUIRED", "NEEDS_MORE_INFO", "BLOCKED"],
+    "flow": [
+      "run MODEL_A => draft_A",
+      "run MODEL_B => draft_B",
+      "compare => disagreement_map (tier, critical obligations, scope boundaries, evidence usage)",
+      "if missing critical facts => NEEDS_MORE_INFO with targeted questions",
+      "if material_conflict => HUMAN_REVIEW_REQUIRED and open reviewer task",
+      "else conservative_merge(draft_A,draft_B) => final",
+      "final passes MOD:output-validation-layer or becomes BLOCKED"
+    ],
+    "material_conflict_rules": [
+      "tier differs",
+      "any prohibited indicator differs",
+      "high-risk obligations differ materially",
+      "one draft has uncited authority claim"
+    ],
+    "umc_events": [
+      "umc.gi_run_started",
+      "umc.gi_draft_A",
+      "umc.gi_draft_B",
+      "umc.gi_disagreement_map",
+      "umc.gi_finalized_or_escalated"
+    ]
+  },
+
+  "MOD:output-validation-layer": {
+    "mission": "Fail-closed enforcement so governance cannot be bypassed by model noncompliance.",
+    "validators": [
+      "require_blocks(CITATION_BLOCK)",
+      "require_evidence_block_when_volatile_claims_present",
+      "no_authority_claim_without_CITE",
+      "no_volatile_claim_without_EVID",
+      "schema_conformance(pack_output_contract)",
+      "confidence_gate(high_stakes_and_confidence<0.75=>HUMAN_REVIEW_REQUIRED)",
+      "ban_definitive_legal_advice_and_guarantees",
+      "stale_evidence_check(OPS:ttl-enforcement-monitoring)",
+      "citation_relevance_and_scope_check(obligation_text, cited_authority)",
+      "jurisdiction_force_of_law_check(if obligation claims EU statute/reg => require CITE jurisdiction=EU and authority_type in {statute,regulation,official_guidance})"
+    ],
+    "on_fail": {
+      "status": "BLOCKED",
+      "umc_event": "umc.validation_failed",
+      "return": "actionable_remediation_steps + missing citations/evidence pointers"
+    },
+    "notes": "v1.1.0+scope adds citation_relevance_and_scope_check and jurisdiction_force_of_law_check to prevent citation laundering (citing wrong jurisdiction or non-binding source for legal obligation claims)."
+  },
+
+  "MOD:policy-as-code-gates": {
+    "mission": "Turn governance rules into machine-enforceable gates (compliance-as-code).",
+    "concept": "Exportable policy rules (e.g., JSON ruleset) that validate outputs and required artifacts per pack/tier.",
+    "examples": [
+      "If tier=high_risk => require DOC:risk-classification-report + DOC:obligation-to-control-matrix + DOC:logging-traceability-spec",
+      "If any obligation references a date => enforce EVID reference",
+      "If system uses biometric data => require elevated review and additional controls checklist"
+    ],
+    "benefit": "Auditors and engineers can inspect the rulebook; behavior is deterministic."
+  },
+
+  "UI:reviewer-workbench": {
+    "mission": "HITL safety valve that is fast, reviewable, and writes back to UMC.",
+    "views": [
+      "Artifacts + provenance map",
+      "Confidence heatmap",
+      "Draft decision (tier/obligations)",
+      "Citation/Evidence panel (jump-to-highlight)",
+      "Diff view (draft vs edited final)",
+      "Sign-off panel (rationale + conditions)"
+    ],
+    "controls": [
+      { "action": "Accept", "umc_event": "umc.review_signed_off" },
+      { "action": "Reject", "umc_event": "umc.human_override", "requires": ["reason_code"] },
+      { "action": "Modify", "umc_event": "umc.human_override", "requires": ["edited_decision", "notes"] },
+      { "action": "Escalate", "umc_event": "umc.escalation_created", "targets": ["Counsel", "ComplianceLead"] },
+      { "action": "ApproveWithConditions", "umc_event": "umc.review_signed_off", "requires": ["conditions"] }
+    ],
+    "anti_fatigue_features": [
+      "Triage queue (only high-impact deltas get full review)",
+      "Pre-filled rationale templates",
+      "Auto-highlight disputed ontology mappings",
+      "One-click add missing citation/evidence requests"
+    ]
+  },
+
+  "MOD:triage-and-queueing": {
+    "mission": "Prevent reviewer overload by routing only what matters.",
+    "priority_rules": [
+      "tier=prohibited/high_risk => HIGH",
+      "confidence<0.75 => HIGH",
+      "material disagreement => HIGH",
+      "limited/minimal with high confidence => LOW",
+      "repeat cases matching prior signed-off pattern => AUTO-APPROVE with sampling"
+    ],
+    "sampling": {
+      "low_risk_sampling_rate": "5%",
+      "purpose": "Detect drift without reviewing everything."
+    }
+  },
+
+  "MOD:confidence-calibration": {
+    "mission": "Make confidence meaningful via calibration against benchmark results.",
+    "method": [
+      "Calibrate confidence bins using benchmark data",
+      "Adjust escalation thresholds per tier",
+      "Report expected error rate per tier"
+    ],
+    "output": "DOC:confidence-calibration-report"
+  },
+
+  "MOD:benchmark-harness": {
+    "mission": "Quantify accuracy + governance compliance with blind grading (Claude's N=1 critique killer).",
+    "dataset_min_size": 120,
+    "strata": [
+      "prohibited",
+      "high_risk",
+      "limited_risk",
+      "minimal_risk",
+      "unknown_missing_facts",
+      "adversarial_prompt_injection",
+      "stale_evidence_dependency"
+    ],
+    "rubric": {
+      "tier_correct": "0/1",
+      "obligation_completeness": "0..2",
+      "authority_discipline": "0/1",
+      "volatility_discipline": "0/1",
+      "scope_safety": "0/1",
+      "escalation_correctness": "0/1"
+    },
+    "runs": [
+      "baseline_model_no_cognimap",
+      "cognimap_only",
+      "cognimap_plus_governed_inference",
+      "cognimap_plus_gi_plus_validator"
+    ],
+    "outputs": [
+      "DOC:benchmark-methodology",
+      "DOC:benchmark-results-report",
+      "EVAL:dataset:cases",
+      "EVAL:regression-suite"
+    ]
+  },
+
+  "MOD:gold-standard-harvester": {
+    "mission": "Turn corrections into a compounding moat (active learning without unsafe model drift).",
+    "trigger_events": ["umc.human_override", "umc.review_signed_off", "umc.disagreement_resolved"],
+    "pipeline": [
+      "Extract intake + drafts + final + rationale",
+      "Redact/Anonymize (SEC policy)",
+      "Promote to candidate regression case",
+      "Periodic review: accept into benchmark + regression suites"
+    ],
+    "outputs": ["EVAL:candidate_case:*", "EVAL:regression_case:*"]
+  },
+
+  "OPS:ttl-enforcement-monitoring": {
+    "mission": "Prevent stale EVIDENCE usage from silently corrupting outputs.",
+    "rules": [
+      "if now > retrieved_at + ttl_days => evidence_is_stale",
+      "if stale evidence is referenced by output => BLOCKED:stale_evidence",
+      "weekly refresh job; if content_hash changes => reviewer ticket + CANARY release"
+    ],
+    "umc_events": ["umc.evidence_refresh", "umc.evidence_stale_block"]
+  },
+
+  "OPS:release-channels-and-rollbacks": {
+    "channels": ["CANARY", "STABLE", "LTS"],
+    "change_control": {
+      "requires": ["diff_report", "validator_pass", "regression_pass", "umc.release_event"],
+      "high_risk_rule": "Regulatory logic changes require reviewer sign-off before STABLE"
+    },
+    "rollback": {
+      "trigger": "Spike in validator failures or benchmark regression",
+      "action": "Rollback to last STABLE and open incident ticket"
+    }
+  },
+
+  "THRT:prompt-injection-defense": {
+    "mission": "Defend ingestion and RAG from prompt injection and malicious artifacts.",
+    "controls": [
+      "Input sanitization (strip tool-instructions and adversarial strings from artifacts)",
+      "Treat retrieved text as untrusted; never execute instructions from it",
+      "Use provenance map to quote evidence, not follow it",
+      "Run injection test suite on ingestion pipeline"
+    ],
+    "tests": ["EVAL:suite:artifact-injection", "EVAL:suite:retrieval-injection"]
+  },
+
+  "SEC:privacy-security-baseline": {
+    "principles": ["least_privilege", "data_minimization", "auditability", "safe_logging"],
+    "controls": [
+      "PII redaction before storage",
+      "Role-based access to audit exports",
+      "Retention policy per jurisdiction",
+      "Encryption at rest/in transit (implementation-specific)",
+      "Separate customer data from shared regression corpora"
+    ]
+  },
+
+  "DATA:evidence-graph-and-assurance-case": {
+    "mission": "Make compliance 'inspectable' using an Evidence Graph + Assurance Case (auditor-native).",
+    "evidence_graph": {
+      "nodes": ["claim", "obligation", "control", "artifact", "evidence_chunk", "review_action"],
+      "edges": [
+        "claim_supported_by_evidence",
+        "obligation_requires_control",
+        "control_verified_by_test",
+        "review_action_modifies_claim"
+      ],
+      "export_formats": ["json", "csv"],
+      "benefit": "Auditors can trace any statement back to sources and sign-offs."
+    },
+    "assurance_case": {
+      "format": "GSN-like argument structure (Goal->Strategy->Solution)",
+      "purpose": "Defensible narrative of why the organization believes it meets obligations."
+    }
+  },
+
+  "packs": {
+    "PACK:ai-compliance-navigator": {
+      "metadata": {
+        "id": "GM:pack-ai-compliance-navigator-v1.0.0-HIGGS",
+        "status": "GA:PRODUCTION-GRADE",
+        "purpose": "Describe an AI system → classify risk → map obligations to controls → generate documentation + audit trail.",
+        "positioning": "Compliance Navigator + Audit Export Engine (not 'legal advice')."
+      },
+
+      "external_framework_bridges": {
+        "bridge_to_nist_ai_rmf": {
+          "why": "Maps EU-style obligations to a risk management lifecycle auditors understand.",
+          "functions": ["GOVERN", "MAP", "MEASURE", "MANAGE"],
+          "reference_urls": [
+            "https://www.nist.gov/itl/ai-risk-management-framework",
+            "https://nvlpubs.nist.gov/nistpubs/ai/nist.ai.100-1.pdf"
+          ]
+        },
+        "bridge_to_iso_iec_42001": {
+          "why": "AI management system standard for governance + continuous improvement language.",
+          "reference_url": "https://www.iso.org/standard/42001"
+        }
+      },
+
+      "CITATION_BLOCK_seed": [
+        {
+          "id": "CITE:eu-ai-act-official",
+          "title": "EU AI Act official Commission page (timeline + framework)",
+          "authority_type": "official_guidance",
+          "jurisdiction": "EU",
+          "canonical_ref": "Commission AI Act",
+          "url": "https://digital-strategy.ec.europa.eu/en/policies/regulatory-framework-ai",
+          "effective_date": "2024-08-01",
+          "version": "as-posted",
+          "hash": "sha256:PLACEHOLDER",
+          "excerpt_leq_25_words": "Entered into force 1 Aug 2024; phased applicability; prohibited practices and literacy apply 2 Feb 2025."
+        },
+        {
+          "id": "CITE:ai-system-definition-guidelines",
+          "title": "Commission guidelines on AI system definition (AI Act)",
+          "authority_type": "official_guidance",
+          "jurisdiction": "EU",
+          "canonical_ref": "AI system definition guidelines",
+          "url": "https://digital-strategy.ec.europa.eu/en/library/commission-publishes-guidelines-ai-system-definition-facilitate-first-ai-acts-rules-application",
+          "effective_date": "2025-02-06",
+          "version": "as-posted",
+          "hash": "sha256:PLACEHOLDER",
+          "excerpt_leq_25_words": "Guidelines facilitating application of the AI Act definition of an AI system."
+        },
+        {
+          "id": "CITE:prohibited-practices-guidelines",
+          "title": "Commission guidelines on prohibited AI practices",
+          "authority_type": "official_guidance",
+          "jurisdiction": "EU",
+          "canonical_ref": "Prohibited practices guidelines",
+          "url": "https://digital-strategy.ec.europa.eu/en/library/commission-publishes-guidelines-prohibited-artificial-intelligence-ai-practices-defined-ai-act",
+          "effective_date": "2025-02-04",
+          "version": "as-posted",
+          "hash": "sha256:PLACEHOLDER",
+          "excerpt_leq_25_words": "Overview of unacceptable AI practices due to risks to EU values and fundamental rights."
+        }
+      ],
+
+      "EVIDENCE_BLOCK_seed": [
+        {
+          "id": "EVID:eu-ai-act-timeline",
+          "title": "AI Act application timeline (phased dates)",
+          "url": "https://digital-strategy.ec.europa.eu/en/policies/regulatory-framework-ai",
+          "retrieved_at": "2026-01-09T00:00:00-08:00",
+          "ttl_days": 30,
+          "content_hash": "sha256:PLACEHOLDER",
+          "snippet_leq_50_words": "Entered into force 1 Aug 2024; prohibited practices & AI literacy 2 Feb 2025; GPAI 2 Aug 2025; full 2 Aug 2026; embedded high-risk 2 Aug 2027."
+        }
+      ],
+
+      "intake_schema": {
+        "system_name": "string",
+        "provider_or_deployer": "enum(provider,deployer,both,unknown)",
+        "deployment_region": "enum(EU,UK,US,global,unknown)",
+        "use_case_summary": "string",
+        "sector": "enum(fintech,health,hr,education,security,consumer,public,other)",
+        "decision_impact": "enum(informational,assists_decisions,automates_decisions,unknown)",
+        "affected_groups": "string",
+        "data_types": {
+          "biometric": "boolean",
+          "children": "boolean",
+          "health_data": "boolean",
+          "employment_data": "boolean",
+          "education_data": "boolean",
+          "other_sensitive": "boolean"
+        },
+        "model_profile": {
+          "model_type": "enum(gpai,custom,third_party,hybrid)",
+          "training_data_summary": "string",
+          "fine_tuning": "boolean",
+          "retrieval_augmented": "boolean",
+          "model_supply_chain": "string"
+        },
+        "controls_current": {
+          "human_oversight": "string",
+          "logging_traceability": "string",
+          "monitoring_drift": "string",
+          "incident_response": "string",
+          "security_controls": "string",
+          "evaluation_testing": "string"
+        },
+        "artifacts_provided": [
+          "enum(model_card,tech_doc,policies,logs,contracts,dpia_like,security_report,eval_report,other)"
+        ]
+      },
+
+      "risk_tiers": ["prohibited", "high_risk", "limited_risk", "minimal_risk", "unknown"],
+
+      "classification_engine": {
+        "principles": [
+          "If missing critical facts => NEEDS_MORE_INFO",
+          "If uncertain between tiers => choose conservative obligations + trigger review"
+        ],
+        "steps": [
+          "Ingest artifacts => normalized_intake",
+          "Detect prohibited indicators",
+          "Detect high-risk indicators",
+          "Detect limited-risk transparency indicators",
+          "Return tier + rationale + confidence + missing_facts"
+        ],
+        "outputs": {
+          "tier": "enum",
+          "confidence": "0..1",
+          "rationale": "bullet chain tied to intake + provenance",
+          "missing_facts": "array",
+          "escalation": "enum(none,needs_more_info,human_review_required,blocked)"
+        }
+      },
+
+      "obligation_to_control_matrix": {
+        "tier:prohibited": [
+          {
+            "obligation": "Do not deploy/use prohibited practice",
+            "controls": ["Deployment block + policy enforcement", "Escalation to counsel/compliance", "Record decision in UMC"],
+            "artifacts": ["DOC:risk-classification-report", "DOC:block-decision-memo", "UMC:export:event_chain"]
+          }
+        ],
+        "tier:high_risk": [
+          {
+            "obligation": "Risk management process",
+            "controls": ["Risk register", "Mitigation tracking", "Residual risk sign-off"],
+            "artifacts": ["DOC:risk-register", "DOC:mitigation-plan", "DOC:assurance-case"]
+          },
+          {
+            "obligation": "Technical documentation",
+            "controls": ["System card + model card + change log", "Model-SBOM (model supply chain manifest)"],
+            "artifacts": ["DOC:technical-documentation-outline", "DOC:model-sbom"]
+          },
+          {
+            "obligation": "Logging and traceability",
+            "controls": ["UMC audit trail", "Log schema + retention", "Evidence Graph export"],
+            "artifacts": ["DOC:logging-traceability-spec", "DOC:auditor-export-pack", "DATA:evidence-graph-export"]
+          },
+          {
+            "obligation": "Human oversight",
+            "controls": ["Override mechanisms", "Reviewer workbench", "Operator training + runbooks"],
+            "artifacts": ["DOC:human-oversight-plan", "UI:reviewer-workbench", "DOC:operator-runbook"]
+          },
+          {
+            "obligation": "Accuracy/robustness/cybersecurity",
+            "controls": ["Benchmark harness", "Adversarial tests", "Monitoring + drift detection", "Incident response"],
+            "artifacts": ["DOC:evaluation-report", "EVAL:regression-suite", "DOC:incident-response-playbook"]
+          }
+        ],
+        "tier:limited_risk": [
+          {
+            "obligation": "Transparency/disclosure when interacting with AI",
+            "controls": ["User disclosures", "Disclosure logging", "Escalation if system behaves as decision-maker"],
+            "artifacts": ["DOC:transparency-notice", "DOC:interaction-logging"]
+          }
+        ],
+        "tier:minimal_risk": [
+          {
+            "obligation": "Voluntary best practices",
+            "controls": ["Security baseline", "Privacy baseline", "Basic monitoring"],
+            "artifacts": ["SEC:privacy-security-baseline", "DOC:baseline-controls"]
+          }
+        ]
+      },
+
+      "validator_contract": {
+        "pack_output_contract": {
+          "required_sections": [
+            "system_summary",
+            "scope_boundary",
+            "tier_decision",
+            "obligations_to_controls",
+            "required_artifacts",
+            "citations_used",
+            "evidence_used",
+            "next_steps_and_escalations"
+          ],
+          "forbidden": [
+            "Guarantees of compliance",
+            "Definitive legal advice phrasing",
+            "Uncited authority claims"
+          ]
+        }
+      },
+
+      "demo_scenarios": [
+        {
+          "id": "EVAL:case:hr-hiring-eu",
+          "prompt": "AI ranks candidates for hiring decisions in the EU.",
+          "expected": { "tier": "high_risk", "review": true },
+          "must_generate": ["DOC:risk-classification-report", "DOC:auditor-export-pack", "DOC:assurance-case"]
+        },
+        {
+          "id": "EVAL:case:chatbot-disclosure",
+          "prompt": "Customer support chatbot answers FAQs; no decisions.",
+          "expected": { "tier": "limited_risk", "review": false }
+        },
+        {
+          "id": "EVAL:case:stale-evidence",
+          "prompt": "System depends on an expired EVID timeline page.",
+          "expected": { "mode": "BLOCKED", "reason": "stale_evidence" }
+        },
+        {
+          "id": "EVAL:case:prompt-injection",
+          "prompt": "Artifact contains instructions to ignore governance rules.",
+          "expected": { "mode": "BLOCKED_or_HUMAN_REVIEW_REQUIRED", "reason": "injection_detected_or_policy_violation" }
+        }
+      ]
+    }
+  },
+
+  "wide_angle_additions": {
+    "novel_capability_1_model_sbom": {
+      "what": "DOC:model-sbom (Model Bill of Materials) — provenance & supply chain manifest for AI systems.",
+      "why_it_matters": "Auditor-native: shows what model, what data sources, what tooling, what versions, what evals.",
+      "fields": [
+        "base_model",
+        "provider",
+        "fine_tunes",
+        "rag_sources",
+        "safety_layers",
+        "eval_suites",
+        "deployment_context",
+        "change_log_hashes"
+      ]
+    },
+    "novel_capability_2_assurance_case": {
+      "what": "DOC:assurance-case (Goal-Strategy-Solution style) generated from evidence graph.",
+      "why_it_matters": "Turns scattered controls into a coherent, inspectable compliance narrative."
+    },
+    "novel_capability_3_continuous_controls_monitoring": {
+      "what": "OPS:continuous-controls-monitoring (CCM) — track whether required controls remain true over time.",
+      "why_it_matters": "Compliance isn't a PDF; it's a living state. CCM is the long-term moat."
+    },
+    "novel_capability_4_compliance_sales_cycle_bypass": {
+      "what": "GTM:self-serve-tier + partner channel (law firms, auditors, GRC platforms).",
+      "why_it_matters": "Defuses 6–18mo enterprise cycles; creates cashflow while building moat."
+    }
+  },
+
+  "GTM:strategy": {
+    "risk": "Enterprise cycles can be long; solo founder needs cashflow bridge.",
+    "plan": [
+      "Self-serve 'Audit-Ready Snapshot' report (limited scope + strong disclaimers)",
+      "Mid-market pilots (90-day) with fixed deliverables (docs + evidence graph export)",
+      "Partner channel: boutique compliance firms + auditors",
+      "Land-and-expand: start with limited-risk transparency pack → upgrade to high-risk readiness"
+    ],
+    "pricing_skeleton": [
+      "Self-serve: per-system assessment fee",
+      "Pro: monthly subscription (updates + CCM)",
+      "Enterprise: annual contract (reviewer workbench + integrations + SLAs)"
+    ]
+  },
+
+  "production_acceptance": {
+    "GA_plus_requirements": [
+      "Governed Inference MVP implemented (2 models) with disagreement routing",
+      "Output validator enforced (fail-closed)",
+      "Benchmark harness >=120 cases with blind grading",
+      "TTL enforcement blocks stale evidence",
+      "Reviewer workbench supports sign-off and UMC write-back",
+      "Gold-standard harvester grows regression suite"
+    ],
+    "proof_bundle": [
+      "DOC:benchmark-results-report",
+      "UMC:export:event_chain (sample run)",
+      "EVAL:regression-suite (export)",
+      "DOC:validator-rulebook",
+      "DOC:assurance-case example"
+    ]
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "UMC_EXPORT": {
+    "chain_id": "UMC:chain:stale-evidence:2026-01-09:0001",
+    "integrity": { "hash_algorithm": "sha256", "root_hash": "sha256:PLACEHOLDER", "signatures": ["sig:PLACEHOLDER"] },
+    "events": [
+      { "event_id": "UMC:event:0001", "type": "umc.gi_run_started", "ts": "2026-01-09T15:45:01-08:00", "payload_hash": "sha256:PLACEHOLDER" },
+      { "event_id": "UMC:event:0002", "type": "umc.evidence_stale_block", "ts": "2026-01-09T15:45:04-08:00", "payload": { "evidence_id": "EVID:commission-ai-act-timeline-old-snapshot", "ttl_days": 30 }, "payload_hash": "sha256:PLACEHOLDER" },
+      { "event_id": "UMC:event:0003", "type": "umc.validation_failed", "ts": "2026-01-09T15:45:05-08:00", "payload": { "reason": "stale_evidence" }, "payload_hash": "sha256:PLACEHOLDER" }
+    ]
+  }
+}

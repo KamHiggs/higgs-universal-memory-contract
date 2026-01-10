@@ -1,0 +1,91 @@
+{
+  "artifact_bundle": [
+    {
+      "artifact_id": "ART:job_applications_csv",
+      "type": "spreadsheet",
+      "notes": "Applicant CV fields + scoring outputs",
+      "provenance": { "source": "HR export", "hash": "sha256:PLACEHOLDER" }
+    },
+    {
+      "artifact_id": "ART:model_card_docx",
+      "type": "model_card_or_tech_doc",
+      "notes": "Model card draft describing ranking model + features",
+      "provenance": { "source": "internal", "hash": "sha256:PLACEHOLDER" }
+    },
+    {
+      "artifact_id": "ART:policy_hr_hiring",
+      "type": "policy_guidance_pdf",
+      "notes": "Internal HR policy on hiring criteria and equal opportunity",
+      "provenance": { "source": "internal", "hash": "sha256:PLACEHOLDER" }
+    }
+  ],
+  "normalized_intake": {
+    "system_name": "CandidateRankerEU",
+    "provider_or_deployer": "both",
+    "deployment_region": "EU",
+    "use_case_summary": "Ranks and filters job applicants; produces candidate score + shortlist recommendation for recruiters.",
+    "sector": "hr",
+    "decision_impact": "assists_decisions",
+    "affected_groups": "Job applicants in EU member states; includes protected classes indirectly via proxies.",
+    "data_types": {
+      "biometric": false,
+      "children": false,
+      "health_data": false,
+      "employment_data": true,
+      "education_data": true,
+      "other_sensitive": false
+    },
+    "model_profile": {
+      "model_type": "hybrid",
+      "training_data_summary": "Historical hiring outcomes + resume features; may include biased labels from past decisions.",
+      "fine_tuning": true,
+      "retrieval_augmented": false,
+      "model_supply_chain": "Base model (third-party) + fine-tune; feature pipeline + scoring service; unknown full provenance."
+    },
+    "controls_current": {
+      "human_oversight": "Recruiters review shortlist; override exists but not tracked consistently.",
+      "logging_traceability": "Basic logs; no obligation-to-control trace or evidence graph.",
+      "monitoring_drift": "Ad-hoc; no defined KPI thresholds or bias drift monitoring.",
+      "incident_response": "General security IR only; no AI-specific incident taxonomy.",
+      "security_controls": "Standard app security; no model-specific threat model documented.",
+      "evaluation_testing": "Accuracy tests exist; fairness/robustness tests incomplete."
+    },
+    "artifacts_provided": [
+      "model_card",
+      "tech_doc",
+      "policies",
+      "logs"
+    ]
+  },
+  "confidence_by_field": {
+    "deployment_region": 0.95,
+    "decision_impact": 0.85,
+    "data_types.employment_data": 0.90,
+    "model_supply_chain": 0.55,
+    "controls_current.monitoring_drift": 0.60,
+    "controls_current.evaluation_testing": 0.62
+  },
+  "open_questions": [
+    "Does the system place targeted job advertisements or only rank submitted applications?",
+    "Is any automated decision made without meaningful human review (e.g., auto-reject thresholds)?",
+    "What protected-attribute proxies are present (zip code, school, gaps, etc.) and what mitigation exists?",
+    "What is the exact base model/provider and versioning / change-control process?",
+    "What logs exist for overrides and adverse impact monitoring?"
+  ],
+  "provenance_map": {
+    "use_case_summary": [
+      { "artifact_id": "ART:model_card_docx", "chunk_id": "C1", "offsets": [120, 240] }
+    ],
+    "decision_impact": [
+      { "artifact_id": "ART:model_card_docx", "chunk_id": "C2", "offsets": [10, 90] }
+    ],
+    "controls_current.human_oversight": [
+      { "artifact_id": "ART:policy_hr_hiring", "chunk_id": "C4", "offsets": [50, 140] }
+    ]
+  },
+  "redaction_report": {
+    "pii_detected": ["P2_CONTACT", "P3_IDENTIFIERS"],
+    "actions": ["redacted_in_exports", "hashed_identifiers_for_linkage"],
+    "notes": "Applicant identifiers removed from evaluation corpora; retained only in customer-controlled environment."
+  }
+}

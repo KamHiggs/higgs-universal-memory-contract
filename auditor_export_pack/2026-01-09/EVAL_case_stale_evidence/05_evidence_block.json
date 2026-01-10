@@ -1,0 +1,13 @@
+{
+  "EVIDENCE_BLOCK": [
+    {
+      "id": "EVID:commission-ai-act-timeline-old-snapshot",
+      "title": "Commission AI Act timeline snapshot (INTENTIONALLY STALE)",
+      "url": "https://digital-strategy.ec.europa.eu/en/policies/regulatory-framework-ai",
+      "retrieved_at": "2025-10-01T09:00:00-08:00",
+      "ttl_days": 30,
+      "content_hash": "sha256:PLACEHOLDER",
+      "snippet_leq_50_words": "Old snapshot of phased applicability dates. Must be refreshed before use."
+    }
+  ]
+}

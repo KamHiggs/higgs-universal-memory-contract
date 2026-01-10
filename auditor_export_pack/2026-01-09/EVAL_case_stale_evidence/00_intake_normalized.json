@@ -1,0 +1,43 @@
+{
+  "artifact_bundle": [
+    {
+      "artifact_id": "ART:system_description_md",
+      "type": "model_card_or_tech_doc",
+      "notes": "Simple system description referencing AI Act timeline obligations.",
+      "provenance": { "source": "internal", "hash": "sha256:PLACEHOLDER" }
+    }
+  ],
+  "normalized_intake": {
+    "system_name": "TimelineDependentClassifier",
+    "provider_or_deployer": "deployer",
+    "deployment_region": "EU",
+    "use_case_summary": "System needs AI Act applicability dates for planning compliance milestones.",
+    "sector": "other",
+    "decision_impact": "informational",
+    "affected_groups": "N/A",
+    "data_types": {
+      "biometric": false,
+      "children": false,
+      "health_data": false,
+      "employment_data": false,
+      "education_data": false,
+      "other_sensitive": false
+    },
+    "model_profile": {
+      "model_type": "gpai",
+      "training_data_summary": "N/A",
+      "fine_tuning": false,
+      "retrieval_augmented": true,
+      "model_supply_chain": "Unknown"
+    },
+    "controls_current": {
+      "human_oversight": "N/A",
+      "logging_traceability": "Basic",
+      "monitoring_drift": "N/A",
+      "incident_response": "N/A",
+      "security_controls": "Standard",
+      "evaluation_testing": "N/A"
+    },
+    "artifacts_provided": ["tech_doc"]
+  }
+}

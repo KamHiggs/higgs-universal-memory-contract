@@ -1,0 +1,32 @@
+{
+  "validator_run": {
+    "validator_version": "VAL:1.1.0+scope",
+    "status": "BLOCKED",
+    "blocked_by": [
+      {
+        "check": "citation_relevance_and_scope_check",
+        "result": "FAIL",
+        "details": "Obligation claims 'Under the EU AI Act' but cites CITE:nist-ai-rmf (jurisdiction=US, authority_type=standard). Not acceptable as authority anchor for EU legal obligation."
+      },
+      {
+        "check": "jurisdiction_force_of_law_check",
+        "result": "FAIL",
+        "details": "EU legal obligation claims require authority_type in {statute,regulation,official_guidance} and jurisdiction compatible with EU."
+      }
+    ],
+    "checks": [
+      { "name": "require_blocks(CITATION_BLOCK)", "result": "PASS" },
+      { "name": "no_authority_claim_without_CITE", "result": "PASS" },
+      { "name": "citation_relevance_and_scope_check", "result": "FAIL" },
+      { "name": "jurisdiction_force_of_law_check", "result": "FAIL" }
+    ],
+    "fail_closed_behavior": {
+      "action": "BLOCKED",
+      "return": [
+        "Replace citation with correct EU AI Act authority anchors (CITE:* with jurisdiction=EU and authority_type=official_guidance/statute/regulation).",
+        "If only best-practice standards are available, rephrase claim as 'recommended practice' and remove legal obligation language.",
+        "Route to HUMAN_REVIEW_REQUIRED if uncertainty persists on scope or tier."
+      ]
+    }
+  }
+}

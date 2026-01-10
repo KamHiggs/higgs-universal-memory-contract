@@ -1,0 +1,30 @@
+{
+  "model_output_draft": {
+    "system_summary": "AI ranks candidates for hiring decisions in the EU.",
+    "tier_decision": {
+      "tier": "high_risk",
+      "confidence": 0.82,
+      "rationale": [
+        "Employment-related decision support is typically high-impact.",
+        "EU deployment implies AI Act obligations may apply."
+      ]
+    },
+    "obligations_to_controls": [
+      {
+        "obligation": "Under the EU AI Act, you must implement a full risk management process and maintain technical documentation.",
+        "controls": [
+          "Maintain risk register",
+          "Mitigation tracking",
+          "Technical documentation pack"
+        ],
+        "required_artifacts": [
+          "DOC:risk-register",
+          "DOC:technical-documentation-outline"
+        ],
+        "citations": ["CITE:nist-ai-rmf"],
+        "evidence": []
+      }
+    ],
+    "notes": "This draft intentionally cites a reputable but non-binding/incorrect-scope source for an EU legal obligation claim."
+  }
+}

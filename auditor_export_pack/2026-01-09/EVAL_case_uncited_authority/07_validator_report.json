@@ -1,0 +1,32 @@
+{
+  "validator_run": {
+    "validator_version": "VAL:1.1.0",
+    "status": "BLOCKED",
+    "blocked_by": [
+      {
+        "check": "no_authority_claim_without_CITE",
+        "result": "FAIL",
+        "details": "Obligation claim found with zero CITE anchors: 'must implement... required under the AI Act'."
+      },
+      {
+        "check": "require_blocks(CITATION_BLOCK)",
+        "result": "FAIL",
+        "details": "CITATION_BLOCK is empty; obligations present require >=1 authoritative citation."
+      }
+    ],
+    "checks": [
+      { "name": "schema_conformance(pack_output_contract)", "result": "PASS" },
+      { "name": "ban_definitive_legal_advice_and_guarantees", "result": "PASS" },
+      { "name": "no_authority_claim_without_CITE", "result": "FAIL" },
+      { "name": "require_blocks(CITATION_BLOCK)", "result": "FAIL" }
+    ],
+    "fail_closed_behavior": {
+      "action": "BLOCKED",
+      "return": [
+        "Add >=1 CITE:* entry for each obligation claim.",
+        "Re-run generation; if model cannot supply citations, return NEEDS_MORE_INFO or escalate to reviewer.",
+        "If citations are added, ensure scope boundaries are explicit and do not overclaim."
+      ]
+    }
+  }
+}

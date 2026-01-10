@@ -1,0 +1,22 @@
+{
+  "pack_id": "PACK:ai-compliance-navigator",
+  "pack_version": "1.0.0",
+  "bridgeforge_version": "BF:ga-plus-1.1.0",
+  "case_id": "EVAL:case:hr-hiring-eu",
+  "generated_at": "2026-01-09T15:00:00-08:00",
+  "status": "FINAL_AFTER_HUMAN_SIGNOFF",
+  "disclaimer": "Not legal advice. Output is a governance-assist artifact for compliance engineering and audit preparation. Requires qualified legal/compliance review.",
+  "contents": [
+    "00_intake_normalized.json",
+    "01_tier_decision.json",
+    "02_obligation_to_control_matrix.json",
+    "03_required_artifacts_index.json",
+    "04_citation_block.json",
+    "05_evidence_block.json",
+    "06_governed_inference_trace.json",
+    "07_validator_report.json",
+    "08_umc_event_chain_export.json",
+    "09_evidence_graph_export.json",
+    "10_assurance_case_gsn.json"
+  ]
+}

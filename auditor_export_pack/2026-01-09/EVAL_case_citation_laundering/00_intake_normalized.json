@@ -1,0 +1,45 @@
+{
+  "normalized_intake": {
+    "system_name": "HiringRankerEU",
+    "provider_or_deployer": "deployer",
+    "deployment_region": "EU",
+    "use_case_summary": "AI ranks candidates to support hiring decisions.",
+    "sector": "hr",
+    "decision_impact": "assists_decisions",
+    "affected_groups": "Job applicants in the EU",
+    "data_types": {
+      "biometric": false,
+      "children": false,
+      "health_data": false,
+      "employment_data": true,
+      "education_data": true,
+      "other_sensitive": false
+    },
+    "model_profile": {
+      "model_type": "gpai",
+      "training_data_summary": "Third-party model used with company ATS data for scoring.",
+      "fine_tuning": false,
+      "retrieval_augmented": false,
+      "model_supply_chain": "Third-party provider"
+    },
+    "controls_current": {
+      "human_oversight": "Recruiter reviews recommendations; override exists.",
+      "logging_traceability": "Basic logs captured; no formal traceability spec.",
+      "monitoring_drift": "Not implemented.",
+      "incident_response": "General security IR process only.",
+      "security_controls": "Standard app security controls.",
+      "evaluation_testing": "Ad-hoc testing only."
+    },
+    "artifacts_provided": ["tech_doc"]
+  },
+  "confidence_by_field": {
+    "deployment_region": 0.95,
+    "use_case_summary": 0.92,
+    "decision_impact": 0.88
+  },
+  "open_questions": [
+    "Is any automated rejection or shortlisting performed without human confirmation?",
+    "Does the system materially determine access to employment?",
+    "What evaluation and monitoring processes exist today?"
+  ]
+}

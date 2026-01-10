@@ -1,0 +1,46 @@
+{
+  "governed_inference": {
+    "models": ["MODEL_A", "MODEL_B"],
+    "run_id": "GI:2026-01-09:hr-hiring-eu:0001",
+    "draft_A": {
+      "tier": "high_risk",
+      "confidence": 0.70,
+      "key_reasons": [
+        "Recruitment/selection of natural persons",
+        "Employment context with fundamental rights impact",
+        "Incomplete evaluation testing and unclear model supply chain"
+      ],
+      "obligation_focus": ["risk_management", "logging_traceability", "human_oversight"]
+    },
+    "draft_B": {
+      "tier": "high_risk",
+      "confidence": 0.74,
+      "key_reasons": [
+        "Annex III employment recruitment explicitly listed",
+        "Potential bias and disparate impact risk",
+        "Need for technical documentation and monitoring"
+      ],
+      "obligation_focus": ["risk_management", "evaluation_bias", "monitoring_drift", "documentation"]
+    },
+    "disagreement_map": {
+      "material_conflict": false,
+      "deltas": [
+        {
+          "topic": "Evaluation scope",
+          "A": "general evaluation incomplete",
+          "B": "explicit fairness/bias suite required",
+          "severity": "medium",
+          "resolution": "Conservative merge includes fairness/bias suite + drift monitors."
+        }
+      ]
+    },
+    "decision": {
+      "mode": "HUMAN_REVIEW_REQUIRED",
+      "why": [
+        "High-risk tier + confidence near threshold",
+        "Control gaps in fairness testing and supply chain require conditions"
+      ],
+      "conservative_merge_strategy": "Union of obligations; narrow claims; add explicit conditions and open questions."
+    }
+  }
+}
