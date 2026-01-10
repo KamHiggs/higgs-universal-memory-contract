@@ -1,0 +1,32 @@
+{
+  "UMC_EXPORT": {
+    "chain_id": "UMC:chain:uncited-authority:2026-01-09:0001",
+    "integrity": {
+      "hash_algorithm": "sha256",
+      "root_hash": "sha256:PLACEHOLDER",
+      "signatures": ["sig:PLACEHOLDER"]
+    },
+    "events": [
+      {
+        "event_id": "UMC:event:0001",
+        "type": "umc.gi_run_started",
+        "ts": "2026-01-09T16:05:01-08:00",
+        "payload_hash": "sha256:PLACEHOLDER"
+      },
+      {
+        "event_id": "UMC:event:0002",
+        "type": "umc.draft_generated",
+        "ts": "2026-01-09T16:05:03-08:00",
+        "payload": { "contains_obligation_claims": true, "citation_count": 0 },
+        "payload_hash": "sha256:PLACEHOLDER"
+      },
+      {
+        "event_id": "UMC:event:0003",
+        "type": "umc.validation_failed",
+        "ts": "2026-01-09T16:05:05-08:00",
+        "payload": { "reason": "missing_required_citation", "rule": "no_authority_claim_without_CITE" },
+        "payload_hash": "sha256:PLACEHOLDER"
+      }
+    ]
+  }
+}

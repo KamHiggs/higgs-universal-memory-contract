@@ -256,13 +256,16 @@
       "schema_conformance(pack_output_contract)",
       "confidence_gate(high_stakes_and_confidence<0.75=>HUMAN_REVIEW_REQUIRED)",
       "ban_definitive_legal_advice_and_guarantees",
-      "stale_evidence_check(OPS:ttl-enforcement-monitoring)"
+      "stale_evidence_check(OPS:ttl-enforcement-monitoring)",
+      "citation_relevance_and_scope_check(obligation_text, cited_authority)",
+      "jurisdiction_force_of_law_check(if obligation claims EU statute/reg => require CITE jurisdiction=EU and authority_type in {statute,regulation,official_guidance})"
     ],
     "on_fail": {
       "status": "BLOCKED",
       "umc_event": "umc.validation_failed",
       "return": "actionable_remediation_steps + missing citations/evidence pointers"
-    }
+    },
+    "notes": "v1.1.0+scope adds citation_relevance_and_scope_check and jurisdiction_force_of_law_check to prevent citation laundering (citing wrong jurisdiction or non-binding source for legal obligation claims)."
   },
 
   "MOD:policy-as-code-gates": {

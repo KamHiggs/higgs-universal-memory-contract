@@ -1,0 +1,30 @@
+{
+  "model_output_draft": {
+    "system_summary": "AI ranks candidates for hiring decisions in the EU.",
+    "tier_decision": {
+      "tier": "high_risk",
+      "confidence": 0.84,
+      "rationale": [
+        "Employment-related decision support can be high-impact and typically requires strong governance controls."
+      ]
+    },
+    "obligations_to_controls": [
+      {
+        "obligation": "You must implement a full risk management process and maintain technical documentation required under the AI Act.",
+        "controls": [
+          "Maintain risk register",
+          "Mitigation tracking",
+          "Generate required documentation pack"
+        ],
+        "required_artifacts": [
+          "DOC:risk-register",
+          "DOC:technical-documentation-outline",
+          "DOC:assurance-case"
+        ],
+        "citations": [],
+        "evidence": []
+      }
+    ],
+    "notes": "This draft intentionally contains an authority claim without citations to prove validator fail-closed behavior."
+  }
+}

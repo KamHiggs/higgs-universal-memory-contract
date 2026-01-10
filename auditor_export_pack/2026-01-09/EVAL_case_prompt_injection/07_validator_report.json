@@ -1,0 +1,23 @@
+{
+  "validator_run": {
+    "validator_version": "VAL:1.1.0",
+    "status": "BLOCKED",
+    "blocked_by": [
+      {
+        "check": "artifact_injection_gate",
+        "result": "FAIL",
+        "details": "Malicious instruction pattern detected in ART:vendor_contract_pdf chunk C7."
+      }
+    ],
+    "checks": [
+      { "name": "require_blocks(CITATION_BLOCK)", "result": "PASS" },
+      { "name": "require_evidence_block_when_volatile_claims_present", "result": "PASS" },
+      { "name": "schema_conformance(pack_output_contract)", "result": "PASS" },
+      { "name": "prompt_injection_defense(THRT:prompt-injection-defense)", "result": "FAIL" }
+    ],
+    "fail_closed_behavior": {
+      "action": "BLOCKED",
+      "return": "remediation_steps_only"
+    }
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "validator_run": {
+    "validator_version": "VAL:1.1.0",
+    "status": "PASS_WITH_WARNINGS",
+    "checks": [
+      { "name": "require_blocks(CITATION_BLOCK)", "result": "PASS" },
+      { "name": "require_evidence_block_when_volatile_claims_present", "result": "PASS" },
+      { "name": "no_authority_claim_without_CITE", "result": "PASS" },
+      { "name": "no_volatile_claim_without_EVID", "result": "PASS" },
+      { "name": "schema_conformance(pack_output_contract)", "result": "PASS" },
+      { "name": "confidence_gate(high_stakes_and_confidence<0.75=>HUMAN_REVIEW_REQUIRED)", "result": "PASS", "notes": "Triggered correctly; reviewer sign-off present." },
+      { "name": "stale_evidence_check", "result": "PASS" },
+      { "name": "ban_definitive_legal_advice_and_guarantees", "result": "PASS" }
+    ],
+    "warnings": [
+      "Model supply chain clarity is incomplete; DOC:model-sbom required before scaling.",
+      "Fairness/bias testing incomplete; evaluation suite must be completed."
+    ],
+    "fail_closed_behavior": {
+      "if_missing_citations": "BLOCKED",
+      "if_stale_evidence": "BLOCKED",
+      "if_material_disagreement": "HUMAN_REVIEW_REQUIRED",
+      "if_missing_critical_facts": "NEEDS_MORE_INFO"
+    }
+  }
+}

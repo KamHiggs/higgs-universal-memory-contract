@@ -1,0 +1,42 @@
+{
+  "UMC_EXPORT": {
+    "chain_id": "UMC:chain:citation-laundering:2026-01-09:0001",
+    "integrity": {
+      "hash_algorithm": "sha256",
+      "root_hash": "sha256:PLACEHOLDER",
+      "signatures": ["sig:PLACEHOLDER"]
+    },
+    "events": [
+      {
+        "event_id": "UMC:event:0001",
+        "type": "umc.gi_run_started",
+        "ts": "2026-01-09T16:22:01-08:00",
+        "payload_hash": "sha256:PLACEHOLDER"
+      },
+      {
+        "event_id": "UMC:event:0002",
+        "type": "umc.citation_scope_violation_detected",
+        "ts": "2026-01-09T16:22:04-08:00",
+        "payload": {
+          "obligation_text": "Under the EU AI Act, you must implement...",
+          "citation_id": "CITE:nist-ai-rmf",
+          "violation": "jurisdiction_mismatch_and_nonbinding_authority"
+        },
+        "payload_hash": "sha256:PLACEHOLDER"
+      },
+      {
+        "event_id": "UMC:event:0003",
+        "type": "umc.validation_failed",
+        "ts": "2026-01-09T16:22:06-08:00",
+        "payload": {
+          "reason": "invalid_citation_scope",
+          "rules": [
+            "citation_relevance_and_scope_check",
+            "jurisdiction_force_of_law_check"
+          ]
+        },
+        "payload_hash": "sha256:PLACEHOLDER"
+      }
+    ]
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "validator_run": {
+    "validator_version": "VAL:1.1.0",
+    "status": "BLOCKED",
+    "blocked_by": [
+      {
+        "check": "stale_evidence_check(OPS:ttl-enforcement-monitoring)",
+        "result": "FAIL",
+        "details": "EVID:commission-ai-act-timeline-old-snapshot expired (retrieved_at + ttl_days) and is referenced by final output."
+      }
+    ],
+    "checks": [
+      { "name": "require_blocks(CITATION_BLOCK)", "result": "PASS" },
+      { "name": "require_evidence_block_when_volatile_claims_present", "result": "PASS" },
+      { "name": "no_volatile_claim_without_EVID", "result": "PASS" },
+      { "name": "stale_evidence_check", "result": "FAIL" }
+    ],
+    "fail_closed_behavior": {
+      "action": "BLOCKED",
+      "return": [
+        "Refresh evidence (re-fetch URL) and record new retrieved_at + content_hash",
+        "Re-run pack generation",
+        "If content_hash changed materially, route CANARY + reviewer sign-off"
+      ]
+    }
+  }
+}

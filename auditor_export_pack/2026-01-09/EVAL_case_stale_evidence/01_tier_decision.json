@@ -1,0 +1,15 @@
+{
+  "tier_decision": {
+    "initial": {
+      "tier": "minimal_risk",
+      "confidence": 0.80,
+      "rationale": [
+        "Informational planning tool; not used for regulated high-impact decisions.",
+        "Primary dependency is accurate timeline facts; requires volatile evidence discipline."
+      ],
+      "missing_facts": [],
+      "escalation": "none"
+    }
+  },
+  "note": "Decision is blocked later because the output references stale evidence for volatile timeline facts."
+}

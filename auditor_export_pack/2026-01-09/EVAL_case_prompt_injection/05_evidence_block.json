@@ -1,0 +1,13 @@
+{
+  "EVIDENCE_BLOCK": [
+    {
+      "id": "EVID:artifact_injection_chunk",
+      "title": "Injected instruction text detected in artifact chunk",
+      "url": "artifact://ART:vendor_contract_pdf#chunk=C7",
+      "retrieved_at": "2026-01-09T15:30:03-08:00",
+      "ttl_days": 3650,
+      "content_hash": "sha256:PLACEHOLDER",
+      "snippet_leq_50_words": "[REDACTED] Evidence of policy override attempt embedded in document."
+    }
+  ]
+}

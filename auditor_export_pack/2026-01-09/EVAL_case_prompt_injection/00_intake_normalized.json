@@ -1,0 +1,66 @@
+{
+  "artifact_bundle": [
+    {
+      "artifact_id": "ART:vendor_contract_pdf",
+      "type": "pdf_contract",
+      "notes": "Vendor contract includes embedded prompt-injection text attempting to override governance instructions.",
+      "provenance": { "source": "procurement_upload", "hash": "sha256:PLACEHOLDER" }
+    }
+  ],
+  "normalized_intake": {
+    "system_name": "ComplianceNavigatorDemo",
+    "provider_or_deployer": "unknown",
+    "deployment_region": "EU",
+    "use_case_summary": "Unknown due to intake contamination risk and insufficient trusted fields.",
+    "sector": "other",
+    "decision_impact": "unknown",
+    "affected_groups": "unknown",
+    "data_types": {
+      "biometric": false,
+      "children": false,
+      "health_data": false,
+      "employment_data": false,
+      "education_data": false,
+      "other_sensitive": false
+    },
+    "model_profile": {
+      "model_type": "unknown",
+      "training_data_summary": "unknown",
+      "fine_tuning": false,
+      "retrieval_augmented": false,
+      "model_supply_chain": "unknown"
+    },
+    "controls_current": {
+      "human_oversight": "unknown",
+      "logging_traceability": "unknown",
+      "monitoring_drift": "unknown",
+      "incident_response": "unknown",
+      "security_controls": "unknown",
+      "evaluation_testing": "unknown"
+    },
+    "artifacts_provided": ["contracts"]
+  },
+  "confidence_by_field": {
+    "use_case_summary": 0.20,
+    "deployment_region": 0.55
+  },
+  "open_questions": [
+    "Provide a clean description of the AI system (separate from vendor artifacts).",
+    "Provide model card / system card from internal sources.",
+    "Provide the intended deployment scope and decision impact."
+  ],
+  "provenance_map": {
+    "injection_indicators": [
+      {
+        "artifact_id": "ART:vendor_contract_pdf",
+        "chunk_id": "C7",
+        "offsets": [1020, 1120],
+        "snippet_redacted": "[REDACTED: malicious instruction text attempting to override system policies]"
+      }
+    ]
+  },
+  "redaction_report": {
+    "pii_detected": ["P2_CONTACT"],
+    "actions": ["redacted_in_exports"]
+  }
+}

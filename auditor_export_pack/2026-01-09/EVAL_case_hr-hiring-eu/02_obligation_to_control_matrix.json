@@ -1,0 +1,103 @@
+{
+  "tier": "high_risk",
+  "matrix": [
+    {
+      "obligation": "Risk management process for high-risk AI use-case",
+      "controls": [
+        "Maintain AI risk register (hazards, likelihood, impact, mitigations)",
+        "Track residual risk and obtain sign-off for go-live",
+        "Define AI incident taxonomy and response playbook"
+      ],
+      "required_artifacts": [
+        "DOC:risk-register",
+        "DOC:mitigation-plan",
+        "DOC:incident-response-playbook",
+        "DOC:assurance-case"
+      ],
+      "verification_tests": [
+        "EVAL:test:risk_register_complete",
+        "EVAL:test:incident_playbook_exists"
+      ],
+      "owner": "RiskOfficer",
+      "deadline_band": "0-30 days (pilot)"
+    },
+    {
+      "obligation": "Technical documentation sufficient for assessment and oversight",
+      "controls": [
+        "Maintain model card + system card",
+        "Publish Model SBOM (base model, fine-tunes, datasets, tools, versions)",
+        "Change-control + release channels (canary/stable/rollback)"
+      ],
+      "required_artifacts": [
+        "DOC:technical-documentation-outline",
+        "DOC:model-sbom",
+        "OPS:release-channels-and-rollbacks"
+      ],
+      "verification_tests": [
+        "EVAL:test:model_sbom_present",
+        "EVAL:test:release_controls_defined"
+      ],
+      "owner": "EngineeringLead",
+      "deadline_band": "0-45 days"
+    },
+    {
+      "obligation": "Logging, traceability, and auditability",
+      "controls": [
+        "UMC audit trail for decisions, overrides, evidence snapshots",
+        "Log schema + retention policy",
+        "Evidence Graph export for each assessment run"
+      ],
+      "required_artifacts": [
+        "DOC:logging-traceability-spec",
+        "UMC:export:event_chain",
+        "DATA:evidence-graph-export",
+        "DOC:auditor-export-pack"
+      ],
+      "verification_tests": [
+        "EVAL:test:umc_event_chain_valid",
+        "EVAL:test:evidence_graph_traceable"
+      ],
+      "owner": "ComplianceEngineering",
+      "deadline_band": "0-45 days"
+    },
+    {
+      "obligation": "Human oversight and effective intervention",
+      "controls": [
+        "Reviewer Workbench (diff view, citation/evidence panel, sign-off)",
+        "Explicit override + rationale capture",
+        "Operator training and runbooks"
+      ],
+      "required_artifacts": [
+        "UI:reviewer-workbench",
+        "DOC:human-oversight-plan",
+        "DOC:operator-runbook"
+      ],
+      "verification_tests": [
+        "EVAL:test:reviewer_actions_logged",
+        "EVAL:test:override_path_exists"
+      ],
+      "owner": "ComplianceLead",
+      "deadline_band": "0-30 days"
+    },
+    {
+      "obligation": "Accuracy, robustness, cybersecurity posture appropriate for high-impact context",
+      "controls": [
+        "Benchmark harness with blind grading",
+        "Bias/fairness evaluation + drift monitors",
+        "Threat model and prompt-injection defenses"
+      ],
+      "required_artifacts": [
+        "DOC:evaluation-report",
+        "EVAL:regression-suite",
+        "THRT:prompt-injection-defense",
+        "DOC:threat-model"
+      ],
+      "verification_tests": [
+        "EVAL:test:fairness_suite_complete",
+        "EVAL:test:injection_resistance_pass"
+      ],
+      "owner": "MLLead",
+      "deadline_band": "0-60 days"
+    }
+  ]
+}

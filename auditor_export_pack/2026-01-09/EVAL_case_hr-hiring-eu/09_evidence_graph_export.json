@@ -1,0 +1,21 @@
+{
+  "evidence_graph": {
+    "nodes": [
+      { "id": "CLAIM:high_risk_employment", "type": "claim", "text": "Recruitment/selection AI is a high-risk area under Annex III employment." },
+      { "id": "OBL:risk_management", "type": "obligation", "text": "Maintain a risk management process for this high-risk use." },
+      { "id": "CTRL:risk_register", "type": "control", "text": "Maintain and review an AI risk register with mitigations." },
+      { "id": "ART:DOC_risk_register", "type": "artifact", "text": "DOC:risk-register" },
+      { "id": "EVID:commission_ai_act_timeline", "type": "evidence_chunk", "ref": "EVID:commission-ai-act-timeline-snapshot" },
+      { "id": "CITE:annex_iii_service_desk", "type": "authority", "ref": "CITE:eu-ai-act-annex-iii-service-desk" },
+      { "id": "REVIEW:signoff_0006", "type": "review_action", "ref": "UMC:event:0006" }
+    ],
+    "edges": [
+      { "from": "CLAIM:high_risk_employment", "to": "CITE:annex_iii_service_desk", "type": "claim_supported_by_authority" },
+      { "from": "OBL:risk_management", "to": "CLAIM:high_risk_employment", "type": "obligation_applies_given_claim" },
+      { "from": "CTRL:risk_register", "to": "OBL:risk_management", "type": "control_satisfies_obligation" },
+      { "from": "ART:DOC_risk_register", "to": "CTRL:risk_register", "type": "artifact_documents_control" },
+      { "from": "REVIEW:signoff_0006", "to": "CLAIM:high_risk_employment", "type": "review_affirms_claim" }
+    ],
+    "export_formats": ["json", "csv"]
+  }
+}

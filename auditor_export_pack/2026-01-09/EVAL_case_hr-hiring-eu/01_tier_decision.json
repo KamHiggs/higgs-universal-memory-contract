@@ -1,0 +1,46 @@
+{
+  "tier_decision": {
+    "initial": {
+      "tier": "high_risk",
+      "confidence": 0.72,
+      "rationale": [
+        "System is intended for recruitment/selection and evaluates candidates for employment decisions.",
+        "Employment recruitment use-cases are listed as high-risk under Annex III category 'Employment, workers management and access to self-employment'.",
+        "Missing supply-chain clarity and incomplete fairness/robustness testing reduce confidence."
+      ],
+      "missing_facts": [
+        "Whether any fully automated rejection occurs",
+        "Exact base model/version and change log",
+        "Bias testing coverage and drift monitoring thresholds"
+      ],
+      "escalation": "human_review_required"
+    },
+    "final_after_review": {
+      "tier": "high_risk",
+      "confidence": 0.84,
+      "review_signoff": {
+        "reviewer_role": "ComplianceLead",
+        "decision": "ApproveWithConditions",
+        "conditions": [
+          "No auto-reject without meaningful human review until oversight + logging controls implemented",
+          "Bias/fairness evaluation suite must be completed before scaling to production hiring",
+          "Model SBOM must be completed with provider + versioning and change-control"
+        ],
+        "notes": "Tier determination confirmed. Controls roadmap required prior to broad deployment."
+      },
+      "escalation": "none"
+    }
+  },
+  "scope_boundary": {
+    "in_scope": [
+      "Candidate scoring",
+      "Filtering/shortlisting recommendations",
+      "Recruiter UI and decision support outputs"
+    ],
+    "out_of_scope": [
+      "General HR compliance outside AI system",
+      "Non-EU deployments",
+      "Downstream background check vendors"
+    ]
+  }
+}

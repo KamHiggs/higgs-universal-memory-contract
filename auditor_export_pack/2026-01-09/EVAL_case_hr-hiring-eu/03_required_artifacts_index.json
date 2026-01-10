@@ -1,0 +1,19 @@
+{
+  "required_artifacts": [
+    { "id": "DOC:risk-classification-report", "purpose": "Tier decision + rationale + scope boundary" },
+    { "id": "DOC:risk-register", "purpose": "Hazards/controls/residual risk tracking" },
+    { "id": "DOC:mitigation-plan", "purpose": "Roadmap from current to compliant controls" },
+    { "id": "DOC:model-sbom", "purpose": "Model supply chain manifest (auditor-native)" },
+    { "id": "DOC:logging-traceability-spec", "purpose": "Log schema, retention, audit trace" },
+    { "id": "DOC:evaluation-report", "purpose": "Benchmark + fairness + robustness results" },
+    { "id": "DOC:human-oversight-plan", "purpose": "HITL workflows + override mechanics" },
+    { "id": "UI:reviewer-workbench", "purpose": "Operational review UX + sign-off capture" },
+    { "id": "UMC:export:event_chain", "purpose": "Tamper-evident decision chain export" },
+    { "id": "DATA:evidence-graph-export", "purpose": "Traceability graph for claims/controls/evidence" },
+    { "id": "DOC:assurance-case", "purpose": "GSN-style argument of compliance posture" }
+  ],
+  "notes": [
+    "Artifacts listed are generated/assembled by BridgeForge modules; final sign-off is human responsibility.",
+    "If any evidence is stale, outputs are BLOCKED by validator."
+  ]
+}

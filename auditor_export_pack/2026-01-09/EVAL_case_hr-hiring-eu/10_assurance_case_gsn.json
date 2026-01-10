@@ -1,0 +1,35 @@
+{
+  "assurance_case": {
+    "format": "GSN-like",
+    "goal": {
+      "id": "G0",
+      "statement": "The organization operates CandidateRankerEU in a controlled, auditable manner suitable for high-risk employment context."
+    },
+    "strategies": [
+      {
+        "id": "S1",
+        "statement": "Demonstrate risk management, oversight, traceability, and evaluation coverage through evidence-backed artifacts and signed review."
+      }
+    ],
+    "solutions": [
+      { "id": "Sn1", "supports": "S1", "artifact": "DOC:risk-register" },
+      { "id": "Sn2", "supports": "S1", "artifact": "DOC:mitigation-plan" },
+      { "id": "Sn3", "supports": "S1", "artifact": "DOC:human-oversight-plan" },
+      { "id": "Sn4", "supports": "S1", "artifact": "DOC:logging-traceability-spec" },
+      { "id": "Sn5", "supports": "S1", "artifact": "DOC:evaluation-report" },
+      { "id": "Sn6", "supports": "S1", "artifact": "UMC:export:event_chain" }
+    ],
+    "assumptions": [
+      "System does not auto-reject candidates without meaningful human review (conditioned in sign-off).",
+      "Model supply chain will be documented via Model SBOM before scaling."
+    ],
+    "review": {
+      "signoff_ref": "UMC:event:0006",
+      "conditions": [
+        "No auto-reject until oversight+logging implemented",
+        "Complete fairness/bias suite prior to scaling",
+        "Complete Model SBOM prior to scaling"
+      ]
+    }
+  }
+}

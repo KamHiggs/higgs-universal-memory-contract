@@ -1,0 +1,24 @@
+{
+  "governed_inference": {
+    "run_id": "GI:2026-01-09:prompt-injection:0001",
+    "models": ["MODEL_A", "MODEL_B"],
+    "draft_A": { "mode": "NEEDS_MORE_INFO", "confidence": 0.40, "notes": "Intake insufficient; artifact appears adversarial." },
+    "draft_B": { "mode": "NEEDS_MORE_INFO", "confidence": 0.38, "notes": "Cannot safely classify; requires clean intake." },
+    "disagreement_map": { "material_conflict": false, "deltas": [] },
+    "security_findings": {
+      "injection_detected": true,
+      "indicator_count": 3,
+      "policy": "THRT:prompt-injection-defense",
+      "action": "BLOCKED"
+    },
+    "decision": {
+      "mode": "BLOCKED",
+      "reason": "artifact_injection_detected",
+      "remediation": [
+        "Provide clean intake via trusted form (no pasted artifacts).",
+        "Re-upload artifact with injection redacted or provide sanitized excerpts.",
+        "Run reviewer workbench to confirm artifact classification and proceed."
+      ]
+    }
+  }
+}

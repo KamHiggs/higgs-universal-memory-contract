@@ -1,0 +1,16 @@
+{
+  "CITATION_BLOCK": [
+    {
+      "id": "CITE:nist-ai-rmf",
+      "title": "NIST AI Risk Management Framework (AI RMF 1.0)",
+      "authority_type": "standard",
+      "jurisdiction": "US",
+      "canonical_ref": "NIST AI RMF",
+      "url": "https://www.nist.gov/itl/ai-risk-management-framework",
+      "effective_date": "2023-01-26",
+      "version": "1.0",
+      "hash": "sha256:PLACEHOLDER",
+      "excerpt_leq_25_words": "Voluntary framework providing guidance for managing AI risks; not a legal requirement of the EU AI Act."
+    }
+  ]
+}

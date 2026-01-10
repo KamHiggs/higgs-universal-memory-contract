@@ -1,0 +1,16 @@
+{
+  "CITATION_BLOCK": [
+    {
+      "id": "CITE:eu-ai-act-commission-timeline",
+      "title": "European Commission — AI Act policy page (application timeline)",
+      "authority_type": "official_guidance",
+      "jurisdiction": "EU",
+      "canonical_ref": "Commission AI Act timeline",
+      "url": "https://digital-strategy.ec.europa.eu/en/policies/regulatory-framework-ai",
+      "effective_date": "2024-08-01",
+      "version": "as-posted",
+      "hash": "sha256:PLACEHOLDER",
+      "excerpt_leq_25_words": "Commission page describing AI Act framework and phased applicability."
+    }
+  ]
+}
