@@ -1,0 +1,222 @@
+{
+  "name": "Invoice Chase - SendGrid Event Webhook",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "sendgrid-events",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [240, 300],
+      "webhookId": "sendgrid-events"
+    },
+    {
+      "parameters": {
+        "content": "## SendGrid Event Webhook Handler\n\n**Purpose:** Process deliverability events from SendGrid\n\n**Events handled:**\n- bounce (permanent failure)\n- dropped (previously bounced)\n- spamreport (customer marked as spam)\n- unsubscribe (customer unsubscribed)\n\n**Actions:**\n- Update suppression_list\n- Log to audit_events\n- Create human_task for important customers\n\n**Setup:**\n1. In SendGrid: Settings → Mail Settings → Event Webhook\n2. Set URL: https://your-n8n.com/webhook/sendgrid-events\n3. Select events: bounce, dropped, spam report, unsubscribe\n4. Save\n\n**Security:**\nTODO: Add webhook signature validation",
+        "height": 500,
+        "width": 600
+      },
+      "id": "sticky-readme",
+      "name": "README",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-200, 180]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse SendGrid event array\nconst body = $input.item.json.body;\nconst events = Array.isArray(body) ? body : [body];\n\nconsole.log(`Received ${events.length} SendGrid events`);\n\nreturn events.map(event => ({ json: event }));"
+      },
+      "id": "code-parse",
+      "name": "Parse Events Array",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process deliverability event\nconst event = $input.item.json;\n\nconst eventType = event.event; // bounce, dropped, spamreport, unsubscribe\nconst email = event.email;\nconst timestamp = new Date(event.timestamp * 1000).toISOString();\n\n// Determine suppression action\nlet emailSuppressed = false;\nlet reason = null;\n\nswitch (eventType) {\n  case 'bounce':\n    if (event.type === 'blocked' || event.status && event.status.startsWith('5')) {\n      emailSuppressed = true;\n      reason = `bounce_${event.type}_${event.reason}`;\n    }\n    break;\n  case 'dropped':\n    emailSuppressed = true;\n    reason = `dropped_${event.reason}`;\n    break;\n  case 'spamreport':\n    emailSuppressed = true;\n    reason = 'spam_report';\n    break;\n  case 'unsubscribe':\n    emailSuppressed = true;\n    reason = 'unsubscribe_sendgrid';\n    break;\n}\n\nreturn {\n  event_type: eventType,\n  email: email,\n  timestamp: timestamp,\n  email_suppressed: emailSuppressed,\n  reason: reason,\n  raw_event: event\n};"
+      },
+      "id": "code-process",
+      "name": "Process Event",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.email_suppressed}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-suppress",
+      "name": "Should Suppress?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO suppression_list (tenant_id, email, email_suppressed, reason, updated_at)\nVALUES ('default', $1, true, $2, NOW())\nON CONFLICT (tenant_id, email) \nDO UPDATE SET \n  email_suppressed = true,\n  reason = EXCLUDED.reason,\n  updated_at = NOW()\nRETURNING id;",
+        "additionalFields": {
+          "queryParameters": "={{ [$json.email, $json.reason] }}"
+        }
+      },
+      "id": "postgres-suppress",
+      "name": "Update Suppression List",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [1120, 200],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-main",
+          "name": "PostgreSQL Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "schema": {
+          "__rl": true,
+          "value": "public",
+          "mode": "list"
+        },
+        "table": {
+          "__rl": true,
+          "value": "audit_events",
+          "mode": "list"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "tenant_id": "default",
+            "client_label": "={{ $env.CLIENT_LABEL }}",
+            "event_type": "deliverability_event",
+            "sev": "warning",
+            "workflow_execution_id": "={{ $executionId }}",
+            "node_name": "sendgrid_webhook",
+            "redacted_context_json": "={{ JSON.stringify({event_type: $json.event_type, email: $json.email, reason: $json.reason}) }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "postgres-audit",
+      "name": "Audit Event",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [1340, 200],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-main",
+          "name": "PostgreSQL Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ {\"status\": \"processed\", \"events\": $json.length} }}"
+      },
+      "id": "respond",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1560, 300]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Parse Events Array",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Events Array": {
+      "main": [
+        [
+          {
+            "node": "Process Event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Event": {
+      "main": [
+        [
+          {
+            "node": "Should Suppress?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Should Suppress?": {
+      "main": [
+        [
+          {
+            "node": "Update Suppression List",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Suppression List": {
+      "main": [
+        [
+          {
+            "node": "Audit Event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Audit Event": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2026-01-11T21:15:00.000Z",
+  "versionId": "1.2.0"
+}

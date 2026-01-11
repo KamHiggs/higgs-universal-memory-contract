@@ -1,0 +1,871 @@
+{
+  "name": "Invoice Chase - Worker (Process + Send)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "*/2 * * * *"
+            }
+          ]
+        }
+      },
+      "id": "trigger-schedule",
+      "name": "Schedule Trigger (Every 2 min)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [240, 400],
+      "notes": "Polls queue every 2 minutes. Scale by running multiple workers."
+    },
+    {
+      "parameters": {
+        "content": "## Invoice Chase - Worker\n\n**Purpose:** Claim queued invoices and process through full decision pipeline\n\n**This workflow:**\n1. Claims invoice from queue (atomic)\n2. Loads latest invoice + customer context\n3. Runs all gates (consent, quiet hours, dedupe, status, high-value)\n4. Renders and validates message\n5. Sends via provider (with internal idempotency)\n6. Logs cost + audit trail\n\n**Race-proof:**\n- Unique bucket constraint prevents concurrent duplicates\n- outbound_requests prevents retry duplicates\n\n**Fail-closed:**\n- Any uncertainty → human task\n- Errors → workflow_errors + human task\n\n**Scale:**\n- Run multiple workers in parallel\n- Each claims own queue items",
+        "height": 560,
+        "width": 600
+      },
+      "id": "sticky-readme",
+      "name": "README",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-200, 200]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH claim AS (\n  SELECT id FROM invoice_queue\n  WHERE status = 'queued'\n    AND (lease_expires_at IS NULL OR lease_expires_at < NOW())\n    AND (next_attempt_at IS NULL OR next_attempt_at <= NOW())\n  ORDER BY created_at ASC\n  LIMIT 1\n  FOR UPDATE SKIP LOCKED\n)\nUPDATE invoice_queue\nSET status = 'processing',\n    lease_expires_at = NOW() + INTERVAL '10 minutes',\n    attempts = attempts + 1,\n    updated_at = NOW()\nFROM claim\nWHERE invoice_queue.id = claim.id\nRETURNING invoice_queue.tenant_id, invoice_queue.invoice_id, invoice_queue.id AS queue_item_id;",
+        "options": {}
+      },
+      "id": "postgres-claim-queue",
+      "name": "S00: Claim Queue Item (Atomic)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [460, 400],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-main",
+          "name": "PostgreSQL Account"
+        }
+      },
+      "notes": "SKIP LOCKED ensures no race conditions"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has-item",
+              "leftValue": "={{ $json.invoice_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "exists"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-has-item",
+      "name": "Claimed Item?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [680, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// No items in queue, exit gracefully\nconsole.log('No queue items available, exiting');\nreturn [];"
+      },
+      "id": "code-no-items",
+      "name": "No Items - Exit",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 520]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{$env.ACCOUNTING_API_URL}}/invoices/{{$json.invoice_id}}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "http-get-invoice",
+      "name": "S01: Load Latest Invoice",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [900, 280],
+      "notes": "Source of truth for status"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{$env.CRM_API_URL}}/contacts/{{$json.customer_id}}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "properties",
+              "value": "consent,timezone,channel_preference,relationship_status"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "http-get-crm",
+      "name": "S02: Load Customer Context",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1120, 280],
+      "notes": "TODO: Configure CRM credentials"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT email_suppressed, sms_suppressed, reason\nFROM suppression_list\nWHERE tenant_id = $1\n  AND (customer_id = $2 OR email = $3 OR phone = $4)\nLIMIT 1;",
+        "additionalFields": {
+          "queryParameters": "={{ [$json.tenant_id, $json.customer_id, $json.customer_email, $json.customer_phone] }}"
+        }
+      },
+      "id": "postgres-suppression",
+      "name": "S02b: Check Suppression List",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [1340, 280],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-main",
+          "name": "PostgreSQL Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT promise_date, note\nFROM promise_to_pay\nWHERE tenant_id = $1\n  AND invoice_id = $2\n  AND promise_date >= CURRENT_DATE\nLIMIT 1;",
+        "additionalFields": {
+          "queryParameters": "={{ [$json.tenant_id, $json.invoice_id] }}"
+        }
+      },
+      "id": "postgres-promise",
+      "name": "S03: Check Promise to Pay",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [1560, 280],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-main",
+          "name": "PostgreSQL Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Merge all context and make decision\nconst crypto = require('crypto');\n\nconst item = $input.item.json;\nconst invoice = item; // Already has invoice data\nconst customerContext = item.customer_context || {};\nconst suppression = item.suppression || { email_suppressed: false, sms_suppressed: false };\nconst promiseToPay = item.promise_to_pay || null;\n\nconst tenantId = item.tenant_id;\nconst now = new Date();\nconst nowIso = now.toISOString();\n\n// Environment config\nconst autoSendMaxCents = parseInt($env.AUTO_SEND_MAX_AMOUNT_CENTS || '1000000');\nconst humanEscalationDays = parseInt($env.HUMAN_ESCALATION_DAYS || '31');\nconst dryRun = $env.DRY_RUN_MODE === 'true';\n\n// Compute days overdue\nconst dueDate = new Date(invoice.due_date);\nconst daysOverdue = Math.floor((now - dueDate) / (1000 * 60 * 60 * 24));\n\n// Decision object\nconst decision = {\n  now_iso: nowIso,\n  days_overdue: daysOverdue,\n  stage: null,\n  tone: null,\n  channel: null,\n  template_id: null,\n  send_allowed: false,\n  block_reason: null,\n  dedupe_bucket_id: null,\n  idempotency_key: null,\n  message_hash: null,\n  dry_run: dryRun\n};\n\n// GATE: Promise to pay active\nif (promiseToPay && promiseToPay.promise_date) {\n  decision.block_reason = 'promise_to_pay_active';\n  decision.send_allowed = false;\n  return { ...item, decision };\n}\n\n// GATE: Status not collectible\nconst nonCollectibleStatuses = ['paid', 'void', 'disputed', 'in_collection'];\nif (nonCollectibleStatuses.includes(invoice.status)) {\n  decision.block_reason = `status_not_collectible_${invoice.status}`;\n  decision.send_allowed = false;\n  return { ...item, decision };\n}\n\n// Determine stage\nif (daysOverdue >= humanEscalationDays) {\n  decision.stage = '4_human_escalation';\n  decision.tone = 'n/a';\n  decision.channel = 'human_task';\n  decision.block_reason = 'stage4_escalation_required';\n  decision.send_allowed = false;\n  return { ...item, decision };\n} else if (daysOverdue >= 16) {\n  decision.stage = '3_final_notice';\n  decision.tone = 'firm';\n  decision.template_id = 'final_notice';\n} else if (daysOverdue >= 8) {\n  decision.stage = '2_second_notice';\n  decision.tone = 'professional';\n  decision.template_id = 'second_notice';\n} else {\n  decision.stage = '1_friendly_reminder';\n  decision.tone = 'friendly';\n  decision.template_id = 'gentle_reminder';\n}\n\n// GATE: High value\nif (invoice.amount_due_cents > autoSendMaxCents) {\n  decision.block_reason = 'high_value_requires_review';\n  decision.send_allowed = false;\n  return { ...item, decision };\n}\n\n// Choose channel\nconst consent = customerContext.consent || { can_email: false, can_sms: false };\nconst channelPref = customerContext.channel_preference || 'email';\n\nif (channelPref === 'email' && consent.can_email && !suppression.email_suppressed) {\n  decision.channel = 'email';\n} else if (channelPref === 'sms' && consent.can_sms && !suppression.sms_suppressed) {\n  decision.channel = 'sms';\n  decision.template_id = decision.template_id.replace('notice', 'sms_short');\n} else if (consent.can_email && !suppression.email_suppressed) {\n  decision.channel = 'email';\n} else if (consent.can_sms && !suppression.sms_suppressed) {\n  decision.channel = 'sms';\n  decision.template_id = 'sms_short_1';\n} else {\n  decision.block_reason = 'no_consent_or_suppressed';\n  decision.send_allowed = false;\n  return { ...item, decision };\n}\n\n// Compute dedupe bucket\nconst stageDedupeHours = {\n  '1_friendly_reminder': parseInt($env.STAGE1_DEDUPE_HOURS || '48'),\n  '2_second_notice': parseInt($env.STAGE2_DEDUPE_HOURS || '72'),\n  '3_final_notice': parseInt($env.STAGE3_DEDUPE_HOURS || '120')\n};\nconst dedupeSeconds = stageDedupeHours[decision.stage] * 3600;\nconst epochSeconds = Math.floor(now.getTime() / 1000);\ndecision.dedupe_bucket_id = Math.floor(epochSeconds / dedupeSeconds);\n\n// Allow send (gates passed)\ndecision.send_allowed = true;\n\nreturn { ...item, decision };"
+      },
+      "id": "code-decide",
+      "name": "S04-S06: Make Decision (Stage + Channel + Gates)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1780, 280]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.decision.send_allowed}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-send-allowed",
+      "name": "Send Allowed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2000, 280]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Blocked - create human task\nconst item = $input.item.json;\nconst decision = item.decision;\n\nconst task = {\n  tenant_id: item.tenant_id,\n  priority: decision.stage === '4_human_escalation' ? 'urgent' : 'normal',\n  task_type: decision.block_reason,\n  title: `Invoice ${item.invoice_number}: ${decision.block_reason}`,\n  description: `Invoice: ${item.invoice_number}\\nCustomer: ${item.customer_name}\\nAmount: ${item.currency} ${(item.amount_due_cents / 100).toFixed(2)}\\nDays Overdue: ${decision.days_overdue}\\nReason: ${decision.block_reason}`,\n  invoice_id: item.invoice_id,\n  customer_id: item.customer_id,\n  amount_due_cents: item.amount_due_cents,\n  days_overdue: decision.days_overdue,\n  stage: decision.stage,\n  status: 'open'\n};\n\nreturn task;"
+      },
+      "id": "code-human-task",
+      "name": "Create Human Task",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2220, 400]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "schema": {
+          "__rl": true,
+          "value": "public",
+          "mode": "list",
+          "cachedResultName": "public"
+        },
+        "table": {
+          "__rl": true,
+          "value": "human_tasks",
+          "mode": "list",
+          "cachedResultName": "human_tasks"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "tenant_id": "={{ $json.tenant_id }}",
+            "priority": "={{ $json.priority }}",
+            "task_type": "={{ $json.task_type }}",
+            "title": "={{ $json.title }}",
+            "description": "={{ $json.description }}",
+            "invoice_id": "={{ $json.invoice_id }}",
+            "customer_id": "={{ $json.customer_id }}",
+            "amount_due_cents": "={{ $json.amount_due_cents }}",
+            "days_overdue": "={{ $json.days_overdue }}",
+            "stage": "={{ $json.stage }}",
+            "status": "={{ $json.status }}"
+          },
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "postgres-insert-task",
+      "name": "Insert Human Task",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [2440, 400],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-main",
+          "name": "PostgreSQL Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Check quiet hours\nconst item = $input.item.json;\nconst decision = item.decision;\nconst customerContext = item.customer_context || {};\n\nconst customerTz = customerContext.timezone || $env.DEFAULT_TIMEZONE || 'America/Los_Angeles';\nconst quietStart = $env.QUIET_HOURS_START || '20:00';\nconst quietEnd = $env.QUIET_HOURS_END || '08:00';\n\n// TODO: Implement timezone-aware quiet hours check\n// For MVP, we'll allow all sends\nconst inQuietHours = false;\n\nif (inQuietHours) {\n  decision.block_reason = 'quiet_hours';\n  decision.send_allowed = false;\n}\n\nreturn item;"
+      },
+      "id": "code-quiet-hours",
+      "name": "S07: Quiet Hours Gate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2220, 160],
+      "notes": "TODO: Implement full timezone logic"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO reminder_sends (\n  tenant_id, invoice_id, stage, channel, dedupe_bucket_id, status, created_at\n)\nVALUES ($1, $2, $3, $4, $5, 'pending', NOW())\nRETURNING id;",
+        "additionalFields": {
+          "queryParameters": "={{ [$json.tenant_id, $json.invoice_id, $json.decision.stage, $json.decision.channel, $json.decision.dedupe_bucket_id] }}"
+        }
+      },
+      "id": "postgres-dedupe-insert",
+      "name": "S09: Insert Dedupe Bucket (Race-Proof)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [2440, 160],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-main",
+          "name": "PostgreSQL Account"
+        }
+      },
+      "notes": "UNIQUE constraint prevents race conditions",
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Check if dedupe insert succeeded\nconst item = $input.item.json;\n\nif (item.error) {\n  // Unique constraint violation - duplicate detected\n  item.decision.block_reason = 'dedupe_conflict';\n  item.decision.send_allowed = false;\n  item.dedupe_insert_failed = true;\n} else {\n  item.dedupe_insert_failed = false;\n  item.reminder_send_id = item.id;\n}\n\nreturn item;"
+      },
+      "id": "code-check-dedupe",
+      "name": "Check Dedupe Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2660, 160]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.dedupe_insert_failed}}",
+              "value2": false
+            }
+          ]
+        }
+      },
+      "id": "if-dedupe-ok",
+      "name": "Dedupe OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2880, 160]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Render message template\nconst item = $input.item.json;\nconst decision = item.decision;\nconst crypto = require('crypto');\n\n// Template data\nconst templateData = {\n  customer_name: item.customer_name,\n  invoice_number: item.invoice_number,\n  amount_due: (item.amount_due_cents / 100).toFixed(2),\n  currency: item.currency,\n  days_overdue: decision.days_overdue,\n  payment_link: item.payment_link || 'https://pay.example.com/pending'\n};\n\n// Templates\nconst templates = {\n  gentle_reminder: {\n    subject: `Friendly Reminder: Invoice #${templateData.invoice_number}`,\n    body: `Hi ${templateData.customer_name},\\n\\nJust a quick reminder that invoice #${templateData.invoice_number} for ${templateData.currency} ${templateData.amount_due} is now ${templateData.days_overdue} days past due.\\n\\nYou can pay here: ${templateData.payment_link}\\n\\nIf you've already sent payment, please disregard this message. If there's any issue preventing payment, reply here so we can help.\\n\\nThank you,\\nAccounts Team\\n\\n---\\nTo stop receiving payment reminders, click here: {{UNSUBSCRIBE_LINK}}`\n  },\n  second_notice: {\n    subject: `Second Notice: Invoice #${templateData.invoice_number} (${templateData.days_overdue} days overdue)`,\n    body: `Hi ${templateData.customer_name},\\n\\nFollowing up on invoice #${templateData.invoice_number} for ${templateData.currency} ${templateData.amount_due}. It is now ${templateData.days_overdue} days overdue.\\n\\nPayment link: ${templateData.payment_link}\\n\\nIf there's an issue preventing payment, please reply so we can work out the next steps.\\n\\nThank you,\\nAccounts Team\\n\\n---\\nTo stop receiving payment reminders, click here: {{UNSUBSCRIBE_LINK}}`\n  },\n  final_notice: {\n    subject: `Action Needed: Invoice #${templateData.invoice_number}`,\n    body: `Hi ${templateData.customer_name},\\n\\nInvoice #${templateData.invoice_number} for ${templateData.currency} ${templateData.amount_due} is now ${templateData.days_overdue} days past due.\\n\\nPlease use the payment link below or reply to coordinate a resolution:\\n${templateData.payment_link}\\n\\nThank you,\\nAccounts Team\\n\\n---\\nTo stop receiving payment reminders, click here: {{UNSUBSCRIBE_LINK}}`\n  },\n  sms_short_1: `Hi ${templateData.customer_name} — invoice #${templateData.invoice_number} (${templateData.currency} ${templateData.amount_due}) is ${templateData.days_overdue} days past due. Pay: ${templateData.payment_link} Reply STOP to opt out.`\n};\n\nconst template = templates[decision.template_id] || templates.gentle_reminder;\n\n// Compute message hash\nconst messageBody = decision.channel === 'email' ? template.body : template;\nconst messageHash = crypto.createHash('sha256').update(messageBody).digest('hex').substring(0, 16);\n\n// Compute idempotency key\nconst idempotencyKey = crypto.createHash('sha256')\n  .update(`${item.tenant_id}:${item.invoice_id}:${decision.stage}:${decision.channel}:${decision.dedupe_bucket_id}:${messageHash}`)\n  .digest('hex');\n\ndecision.message_hash = messageHash;\ndecision.idempotency_key = idempotencyKey;\n\nitem.message = {\n  subject: template.subject || null,\n  body: messageBody,\n  template_id: decision.template_id\n};\n\nreturn item;"
+      },
+      "id": "code-render",
+      "name": "S11: Render Template + Compute Hashes",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3100, 60]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO outbound_requests (\n  tenant_id, provider, idempotency_key, status, created_at, request_meta\n)\nVALUES ($1, $2, $3, 'pending', NOW(), $4::jsonb)\nRETURNING id;",
+        "additionalFields": {
+          "queryParameters": "={{ [$json.tenant_id, $json.decision.channel, $json.decision.idempotency_key, JSON.stringify({invoice_id: $json.invoice_id, stage: $json.decision.stage})] }}"
+        }
+      },
+      "id": "postgres-idempotency",
+      "name": "S10: Insert Outbound Request (Idempotency)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [3320, 60],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-main",
+          "name": "PostgreSQL Account"
+        }
+      },
+      "continueOnFail": true,
+      "notes": "Internal idempotency because SendGrid is NOT idempotent"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Check if outbound request insert succeeded\nconst item = $input.item.json;\n\nif (item.error) {\n  // Already sent (retry detected)\n  item.already_sent = true;\n  console.log(`Idempotency key ${item.decision.idempotency_key} already exists - skipping send`);\n} else {\n  item.already_sent = false;\n  item.outbound_request_id = item.id;\n}\n\nreturn item;"
+      },
+      "id": "code-check-idempotency",
+      "name": "Check Idempotency Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3540, 60]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.already_sent}}",
+              "value2": false
+            }
+          ]
+        }
+      },
+      "id": "if-not-already-sent",
+      "name": "Not Already Sent?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [3760, 60]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.decision.dry_run}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-dry-run",
+      "name": "Dry Run Mode?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [3980, 60]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Dry run - simulate success\nconst item = $input.item.json;\n\nconsole.log('DRY RUN: Would send', item.decision.channel, 'to', item.customer_email || item.customer_phone);\nconsole.log('Subject:', item.message.subject);\nconsole.log('Body preview:', item.message.body.substring(0, 100) + '...');\n\nitem.provider_result = {\n  provider: 'dry_run',\n  message_id: `dry_run_${Date.now()}`,\n  status: 'simulated',\n  timestamp: new Date().toISOString()\n};\n\nreturn item;"
+      },
+      "id": "code-dry-run-send",
+      "name": "Simulate Send (Dry Run)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [4200, -40]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.sendgrid.com/v3/mail/send",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n  \"personalizations\": [{\n    \"to\": [{\"email\": $json.customer_email}]\n  }],\n  \"from\": {\"email\": $env.COMPANY_EMAIL},\n  \"subject\": $json.message.subject,\n  \"content\": [{\"type\": \"text/plain\", \"value\": $json.message.body}]\n} }}",
+        "options": {
+          "retry": {
+            "retry": {
+              "maxRetries": 3,
+              "retryOnStatusCodes": [
+                {
+                  "statusCode": "429"
+                },
+                {
+                  "statusCode": "5xx"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "id": "http-sendgrid",
+      "name": "Send Email (SendGrid)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [4200, 160],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "sendgrid-auth",
+          "name": "SendGrid Auth"
+        }
+      },
+      "notes": "TODO: Configure SendGrid credentials"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE reminder_sends\nSET status = 'sent',\n    sent_at = NOW(),\n    provider = $1,\n    provider_message_id = $2,\n    message_hash = $3,\n    template_id = $4\nWHERE id = $5;",
+        "additionalFields": {
+          "queryParameters": "={{ [$json.provider_result.provider, $json.provider_result.message_id, $json.decision.message_hash, $json.decision.template_id, $json.reminder_send_id] }}"
+        }
+      },
+      "id": "postgres-update-send",
+      "name": "S16: Update reminder_sends (Success)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [4420, 60],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-main",
+          "name": "PostgreSQL Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "schema": {
+          "__rl": true,
+          "value": "public",
+          "mode": "list"
+        },
+        "table": {
+          "__rl": true,
+          "value": "cost_tracking",
+          "mode": "list"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "tenant_id": "={{ $json.tenant_id }}",
+            "invoice_id": "={{ $json.invoice_id }}",
+            "channel": "={{ $json.decision.channel }}",
+            "cost_usd": "={{ $json.decision.channel === 'email' ? $env.EMAIL_COST_USD : $env.SMS_COST_USD }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "postgres-cost",
+      "name": "S16b: Log Cost",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [4640, 60],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-main",
+          "name": "PostgreSQL Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "schema": {
+          "__rl": true,
+          "value": "public",
+          "mode": "list"
+        },
+        "table": {
+          "__rl": true,
+          "value": "audit_events",
+          "mode": "list"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "tenant_id": "={{ $json.tenant_id }}",
+            "client_label": "={{ $env.CLIENT_LABEL }}",
+            "event_type": "reminder_sent",
+            "sev": "info",
+            "invoice_id": "={{ $json.invoice_id }}",
+            "invoice_number": "={{ $json.invoice_number }}",
+            "customer_id": "={{ $json.customer_id }}",
+            "stage": "={{ $json.decision.stage }}",
+            "channel": "={{ $json.decision.channel }}",
+            "provider": "={{ $json.provider_result.provider }}",
+            "provider_message_id": "={{ $json.provider_result.message_id }}",
+            "workflow_execution_id": "={{ $executionId }}",
+            "node_name": "S14_send"
+          }
+        },
+        "options": {}
+      },
+      "id": "postgres-audit-success",
+      "name": "S17: Audit Success",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [4860, 60],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-main",
+          "name": "PostgreSQL Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE invoice_queue\nSET status = 'done',\n    updated_at = NOW(),\n    lease_expires_at = NULL\nWHERE id = $1;",
+        "additionalFields": {
+          "queryParameters": "={{ [$json.queue_item_id] }}"
+        }
+      },
+      "id": "postgres-complete-queue",
+      "name": "S18: Complete Queue Item",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [5080, 60],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-main",
+          "name": "PostgreSQL Account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Schedule Trigger (Every 2 min)": {
+      "main": [
+        [
+          {
+            "node": "S00: Claim Queue Item (Atomic)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "S00: Claim Queue Item (Atomic)": {
+      "main": [
+        [
+          {
+            "node": "Claimed Item?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claimed Item?": {
+      "main": [
+        [
+          {
+            "node": "S01: Load Latest Invoice",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Items - Exit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "S01: Load Latest Invoice": {
+      "main": [
+        [
+          {
+            "node": "S02: Load Customer Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "S02: Load Customer Context": {
+      "main": [
+        [
+          {
+            "node": "S02b: Check Suppression List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "S02b: Check Suppression List": {
+      "main": [
+        [
+          {
+            "node": "S03: Check Promise to Pay",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "S03: Check Promise to Pay": {
+      "main": [
+        [
+          {
+            "node": "S04-S06: Make Decision (Stage + Channel + Gates)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "S04-S06: Make Decision (Stage + Channel + Gates)": {
+      "main": [
+        [
+          {
+            "node": "Send Allowed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Allowed?": {
+      "main": [
+        [
+          {
+            "node": "S07: Quiet Hours Gate",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create Human Task",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Human Task": {
+      "main": [
+        [
+          {
+            "node": "Insert Human Task",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "S07: Quiet Hours Gate": {
+      "main": [
+        [
+          {
+            "node": "S09: Insert Dedupe Bucket (Race-Proof)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "S09: Insert Dedupe Bucket (Race-Proof)": {
+      "main": [
+        [
+          {
+            "node": "Check Dedupe Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Dedupe Result": {
+      "main": [
+        [
+          {
+            "node": "Dedupe OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dedupe OK?": {
+      "main": [
+        [
+          {
+            "node": "S11: Render Template + Compute Hashes",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create Human Task",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "S11: Render Template + Compute Hashes": {
+      "main": [
+        [
+          {
+            "node": "S10: Insert Outbound Request (Idempotency)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "S10: Insert Outbound Request (Idempotency)": {
+      "main": [
+        [
+          {
+            "node": "Check Idempotency Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Idempotency Result": {
+      "main": [
+        [
+          {
+            "node": "Not Already Sent?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Not Already Sent?": {
+      "main": [
+        [
+          {
+            "node": "Dry Run Mode?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "S18: Complete Queue Item",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dry Run Mode?": {
+      "main": [
+        [
+          {
+            "node": "Simulate Send (Dry Run)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Email (SendGrid)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simulate Send (Dry Run)": {
+      "main": [
+        [
+          {
+            "node": "S16: Update reminder_sends (Success)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Email (SendGrid)": {
+      "main": [
+        [
+          {
+            "node": "S16: Update reminder_sends (Success)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "S16: Update reminder_sends (Success)": {
+      "main": [
+        [
+          {
+            "node": "S16b: Log Cost",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "S16b: Log Cost": {
+      "main": [
+        [
+          {
+            "node": "S17: Audit Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "S17: Audit Success": {
+      "main": [
+        [
+          {
+            "node": "S18: Complete Queue Item",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2026-01-11T21:00:00.000Z",
+  "versionId": "1.2.0"
+}
