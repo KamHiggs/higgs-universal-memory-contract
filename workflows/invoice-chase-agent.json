@@ -1,0 +1,427 @@
+{
+  "name": "Invoice Chase Agent - MVP",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "manual-trigger-1",
+      "name": "Manual Trigger - Start Here",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "content": "## Invoice Chase Agent - MVP Workflow\n\n**Purpose:** Automatically recover overdue invoices\n\n**What this does:**\n1. Gets list of overdue invoices\n2. For each invoice:\n   - Checks customer consent\n   - Determines escalation stage\n   - Generates personalized message\n   - Sends reminder (email or SMS)\n   - Logs to audit trail\n\n**Next Steps:**\n1. Configure your accounting system connection\n2. Add your CRM for customer context\n3. Set up SendGrid/Twilio credentials\n4. Test with sample data\n5. Switch to Schedule Trigger for production\n\n**Pricing:** $499/month per customer subscription",
+        "height": 464,
+        "width": 565
+      },
+      "id": "sticky-note-1",
+      "name": "README - Start Here",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-220, 180]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{$env.ACCOUNTING_API_URL}}/invoices",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "status",
+              "value": "overdue"
+            },
+            {
+              "name": "orderBy",
+              "value": "dueDate"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "http-get-invoices",
+      "name": "GET Overdue Invoices",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [460, 300],
+      "notes": "TODO: Replace with your accounting system node (QuickBooks, Xero, Stripe, etc.)\n\nFor now, this returns sample data."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Sample overdue invoices for testing\n// TODO: Remove this once you connect real accounting system\n\nconst sampleInvoices = [\n  {\n    invoice_id: \"INV-001\",\n    invoice_number: \"2024-001\",\n    customer_id: \"CUST-123\",\n    customer_name: \"Acme Corp\",\n    customer_email: \"billing@acme.com\",\n    amount: 1500.00,\n    due_date: \"2024-01-01\",\n    days_overdue: 3,\n    status: \"overdue\",\n    payment_link: \"https://pay.example.com/inv-001\"\n  },\n  {\n    invoice_id: \"INV-002\",\n    invoice_number: \"2024-002\",\n    customer_id: \"CUST-456\",\n    customer_name: \"TechStart Inc\",\n    customer_email: \"accounts@techstart.com\",\n    amount: 3200.00,\n    due_date: \"2024-01-05\",\n    days_overdue: 10,\n    status: \"overdue\",\n    payment_link: \"https://pay.example.com/inv-002\"\n  }\n];\n\nreturn sampleInvoices.map(invoice => ({ json: invoice }));"
+      },
+      "id": "code-sample-data",
+      "name": "Sample Data (Remove in Production)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "split-invoices",
+      "name": "Process Each Invoice",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get customer consent flags from CRM\n// TODO: Replace with real CRM API call (HubSpot, Salesforce, etc.)\n\nconst invoice = $input.item.json;\n\n// Sample customer context\nconst customerContext = {\n  customer_id: invoice.customer_id,\n  consent_flags: {\n    can_email: true,\n    can_sms: true,\n    can_call: false\n  },\n  payment_history: {\n    total_invoices: 12,\n    on_time_payments: 10,\n    late_payments: 2\n  },\n  relationship_status: \"good\",\n  last_reminder_sent_at: null\n};\n\nreturn {\n  ...invoice,\n  customer_context: customerContext\n};"
+      },
+      "id": "code-get-customer-context",
+      "name": "Get Customer Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 300],
+      "notes": "TODO: Replace with real CRM integration"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.customer_context.consent_flags.can_email}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-consent-check",
+      "name": "Has Email Consent?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1340, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// VALIDATOR: Consent Check Failed\nconst invoice = $input.item.json;\n\nconsole.log('❌ BLOCKED: No email consent for customer', invoice.customer_id);\n\n// Log violation\nreturn {\n  validation_result: 'FAILED',\n  reason: 'no_email_consent',\n  invoice_id: invoice.invoice_id,\n  customer_id: invoice.customer_id,\n  action_taken: 'blocked',\n  requires_human_review: true\n};"
+      },
+      "id": "code-consent-fail",
+      "name": "Log Consent Violation",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1560, 420],
+      "notes": "Security: Never send without consent"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Determine escalation stage based on days overdue\nconst invoice = $input.item.json;\nconst daysOverdue = invoice.days_overdue;\n\nlet stage, channel, tone, template;\n\nif (daysOverdue >= 1 && daysOverdue <= 7) {\n  stage = '1_friendly_reminder';\n  channel = 'email';\n  tone = 'friendly';\n  template = 'gentle_reminder';\n} else if (daysOverdue >= 8 && daysOverdue <= 15) {\n  stage = '2_second_notice';\n  channel = 'email';\n  tone = 'professional';\n  template = 'second_notice';\n} else if (daysOverdue >= 16 && daysOverdue <= 30) {\n  stage = '3_final_notice';\n  channel = 'email';\n  tone = 'firm';\n  template = 'final_notice';\n} else if (daysOverdue >= 31) {\n  stage = '4_human_escalation';\n  channel = 'human_task';\n  tone = 'n/a';\n  template = 'n/a';\n}\n\nreturn {\n  ...invoice,\n  escalation: {\n    stage,\n    channel,\n    tone,\n    template,\n    days_overdue: daysOverdue\n  }\n};"
+      },
+      "id": "code-determine-stage",
+      "name": "Determine Escalation Stage",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1560, 180]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.escalation.stage}}",
+              "operation": "notContains",
+              "value2": "human"
+            }
+          ]
+        }
+      },
+      "id": "if-needs-human",
+      "name": "Auto-Send or Human?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1780, 180]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Generate personalized reminder message\nconst invoice = $input.item.json;\nconst { customer_name, invoice_number, amount, days_overdue, payment_link } = invoice;\nconst { tone, template } = invoice.escalation;\n\n// Message templates\nconst templates = {\n  gentle_reminder: {\n    subject: `Friendly Reminder: Invoice #${invoice_number}`,\n    body: `Hi ${customer_name},\\n\\nI hope this message finds you well! I wanted to send a quick reminder that invoice #${invoice_number} for $${amount} was due ${days_overdue} days ago.\\n\\nI understand things can get busy, so here's a quick payment link:\\n\\n${payment_link}\\n\\nIf you've already sent payment, please disregard this message. If you have any questions, feel free to reach out.\\n\\nThank you!\\n\\nBest regards,\\nAccounts Team`\n  },\n  second_notice: {\n    subject: `Second Notice: Invoice #${invoice_number} - ${days_overdue} Days Overdue`,\n    body: `Hi ${customer_name},\\n\\nI'm following up on invoice #${invoice_number} for $${amount}, which is now ${days_overdue} days past due.\\n\\nI want to help resolve this quickly:\\n\\n• Quick payment link: ${payment_link}\\n• Questions? Reply to this email\\n\\nIf there's an issue preventing payment, please let me know so we can work together on a solution.\\n\\nThank you for your attention to this matter.\\n\\nBest regards,\\nAccounts Team`\n  },\n  final_notice: {\n    subject: `FINAL NOTICE: Invoice #${invoice_number} - Action Required`,\n    body: `${customer_name},\\n\\nThis is a final notice regarding invoice #${invoice_number} for $${amount}, which is now ${days_overdue} days overdue.\\n\\nWe need to resolve this matter promptly. Please take action immediately:\\n\\n• Pay now: ${payment_link}\\n• Contact us to arrange payment\\n\\nIf we don't hear from you within 7 days, we may need to take further action.\\n\\nWe value your partnership and hope to resolve this quickly.\\n\\nBest regards,\\nAccounts Team`\n  }\n};\n\nconst message = templates[template] || templates.gentle_reminder;\n\nreturn {\n  ...invoice,\n  generated_message: {\n    subject: message.subject,\n    body: message.body,\n    tone: tone,\n    template: template\n  }\n};"
+      },
+      "id": "code-generate-message",
+      "name": "Generate Reminder Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2000, 80]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{$json.amount}}",
+              "operation": "smallerEqual",
+              "value2": 10000
+            }
+          ]
+        }
+      },
+      "id": "if-amount-threshold",
+      "name": "Amount < $10k?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2220, 80],
+      "notes": "Safety: High-value invoices need human review"
+    },
+    {
+      "parameters": {
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "method": "POST",
+        "url": "={{$env.SENDGRID_API_URL}}/mail/send",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "personalizations",
+              "value": "=[{\"to\":[{\"email\":\"{{$json.customer_email}}\"}]}]"
+            },
+            {
+              "name": "from",
+              "value": "={\"email\":\"{{$env.COMPANY_EMAIL}}\"}"
+            },
+            {
+              "name": "subject",
+              "value": "={{$json.generated_message.subject}}"
+            },
+            {
+              "name": "content",
+              "value": "=[{\"type\":\"text/plain\",\"value\":\"{{$json.generated_message.body}}\"}]"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "http-send-email",
+      "name": "Send Email Reminder",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [2440, 80],
+      "notes": "TODO: Configure SendGrid credentials"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Audit log entry\nconst invoice = $input.item.json;\nconst timestamp = new Date().toISOString();\n\nconst auditEntry = {\n  event_type: 'reminder_sent',\n  timestamp: timestamp,\n  invoice_id: invoice.invoice_id,\n  customer_id: invoice.customer_id,\n  amount: invoice.amount,\n  days_overdue: invoice.days_overdue,\n  escalation_stage: invoice.escalation?.stage,\n  channel: invoice.escalation?.channel || 'email',\n  message_subject: invoice.generated_message?.subject,\n  status: 'success'\n};\n\nconsole.log('✅ Reminder sent:', auditEntry);\n\nreturn auditEntry;"
+      },
+      "id": "code-audit-log",
+      "name": "Log to Audit Trail",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2660, 80]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Create human task for high-value invoice\nconst invoice = $input.item.json;\n\nconst task = {\n  priority: 'high',\n  title: `High-Value Invoice Needs Review: ${invoice.invoice_number}`,\n  description: `Invoice: ${invoice.invoice_number}\\nCustomer: ${invoice.customer_name}\\nAmount: $${invoice.amount}\\nDays Overdue: ${invoice.days_overdue}\\n\\nThis invoice exceeds the auto-send threshold ($10,000).\\nPlease review and take appropriate action.`,\n  invoice_id: invoice.invoice_id,\n  customer_id: invoice.customer_id,\n  amount: invoice.amount,\n  action_required: 'manual_review'\n};\n\nconsole.log('⚠️ High-value invoice flagged for human review:', task);\n\nreturn task;"
+      },
+      "id": "code-high-value-task",
+      "name": "Create Human Task (High Value)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2440, 200],
+      "notes": "Safety: Amount > $10k requires human review"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Create human escalation task\nconst invoice = $input.item.json;\n\nconst task = {\n  priority: 'urgent',\n  title: `Invoice Requires Human Attention: ${invoice.invoice_number}`,\n  description: `Invoice: ${invoice.invoice_number}\\nCustomer: ${invoice.customer_name}\\nAmount: $${invoice.amount}\\nDays Overdue: ${invoice.days_overdue}\\nStage: ${invoice.escalation?.stage}\\n\\nThis invoice has reached escalation stage requiring human intervention.`,\n  invoice_id: invoice.invoice_id,\n  customer_id: invoice.customer_id,\n  amount: invoice.amount,\n  days_overdue: invoice.days_overdue,\n  action_required: 'manual_escalation'\n};\n\nconsole.log('🚨 Invoice escalated to human:', task);\n\nreturn task;"
+      },
+      "id": "code-human-escalation",
+      "name": "Create Human Task (Escalation)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2000, 280],
+      "notes": "31+ days overdue requires human attention"
+    },
+    {
+      "parameters": {
+        "content": "## 🔴 VALIDATION FAILURES\n\nReminders blocked here due to:\n- Missing email consent\n- Duplicate (sent within 48h)\n- Other policy violations\n\nThese require human review.",
+        "height": 242,
+        "width": 348
+      },
+      "id": "sticky-note-failed",
+      "name": "Validation Failures",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [1400, 480]
+    },
+    {
+      "parameters": {
+        "content": "## ✅ SUCCESS PATH\n\nReminders sent:\n- Consent verified ✓\n- Stage determined ✓\n- Message personalized ✓\n- Amount within threshold ✓\n- Logged to audit trail ✓",
+        "height": 242,
+        "width": 348
+      },
+      "id": "sticky-note-success",
+      "name": "Success Path",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [2500, -60]
+    },
+    {
+      "parameters": {
+        "content": "## ⚠️ HUMAN ESCALATIONS\n\nCases requiring human review:\n- High-value invoices (>$10k)\n- 31+ days overdue\n- Customer disputes\n- Policy exceptions\n\nTODO: Connect to Slack/email",
+        "height": 282,
+        "width": 348
+      },
+      "id": "sticky-note-escalations",
+      "name": "Human Escalations",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [1840, 340]
+    }
+  ],
+  "connections": {
+    "Manual Trigger - Start Here": {
+      "main": [
+        [
+          {
+            "node": "GET Overdue Invoices",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GET Overdue Invoices": {
+      "main": [
+        [
+          {
+            "node": "Sample Data (Remove in Production)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sample Data (Remove in Production)": {
+      "main": [
+        [
+          {
+            "node": "Process Each Invoice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Each Invoice": {
+      "main": [
+        [
+          {
+            "node": "Get Customer Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Customer Context": {
+      "main": [
+        [
+          {
+            "node": "Has Email Consent?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Email Consent?": {
+      "main": [
+        [
+          {
+            "node": "Determine Escalation Stage",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Consent Violation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Determine Escalation Stage": {
+      "main": [
+        [
+          {
+            "node": "Auto-Send or Human?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Auto-Send or Human?": {
+      "main": [
+        [
+          {
+            "node": "Generate Reminder Message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create Human Task (Escalation)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Reminder Message": {
+      "main": [
+        [
+          {
+            "node": "Amount < $10k?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Amount < $10k?": {
+      "main": [
+        [
+          {
+            "node": "Send Email Reminder",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create Human Task (High Value)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Email Reminder": {
+      "main": [
+        [
+          {
+            "node": "Log to Audit Trail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2026-01-11T20:00:00.000Z",
+  "versionId": "1.0.0"
+}
