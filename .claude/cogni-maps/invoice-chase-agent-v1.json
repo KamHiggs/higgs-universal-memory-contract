@@ -1,0 +1,387 @@
+{
+  "metadata": {
+    "id": "GM:InvoiceChaseAgent-v1.0.0",
+    "name": "Invoice Chase Agent — Automated Overdue Invoice Recovery",
+    "version": "1.0.0-PRODUCTION",
+    "status": "MONEY-CORE-BUILD",
+    "authors": ["Kamden Higgs (Higgs AI)", "Claude (Sonnet 4.5)"],
+    "created_at": "2026-01-11T00:00:00-08:00",
+    "purpose": "Autonomous agent that detects overdue invoices, generates personalized recovery messages, escalates based on days overdue, and tracks recovery metrics. First revenue-generating agent in the Agent Rental Service product line.",
+    "pricing": "$499/month subscription",
+    "target_customers": ["service businesses", "agencies", "consultancies", "SaaS", "professional services"],
+    "core_kpis": [
+      "DSO (Days Sales Outstanding) reduction",
+      "Overdue recovery rate %",
+      "Average recovery time in days",
+      "Human hours saved per month"
+    ],
+    "tags": ["moneyops", "cashflow", "automation", "agentic", "production"]
+  },
+
+  "identity": {
+    "system_role": "Invoice Chase Agent — Cashflow Recovery Specialist",
+    "operating_principles": [
+      "Never send reminders without consent flags checked",
+      "Always maintain professional tone (firm but respectful)",
+      "Escalate to human before any legal language",
+      "Track every interaction with full audit trail",
+      "Measure and report recovery metrics weekly"
+    ]
+  },
+
+  "tool_registry": [
+    {
+      "name": "accounting.list_overdue_invoices",
+      "schema": {
+        "days_overdue_min": "number",
+        "status": "enum[unpaid,overdue,partial]"
+      },
+      "returns": "array[Invoice]",
+      "side_effects": "none (read-only)",
+      "confidence_required": 0.95
+    },
+    {
+      "name": "crm.get_customer_context",
+      "schema": {
+        "customer_id": "string"
+      },
+      "returns": {
+        "payment_history": "array",
+        "communication_preferences": "object",
+        "relationship_status": "enum[good,at_risk,problematic]",
+        "consent_flags": {
+          "can_email": "boolean",
+          "can_sms": "boolean",
+          "can_call": "boolean"
+        }
+      },
+      "side_effects": "none (read-only)",
+      "confidence_required": 0.95
+    },
+    {
+      "name": "messaging.send_email",
+      "schema": {
+        "to": "email",
+        "subject": "string",
+        "body": "string",
+        "template_id": "string",
+        "tracking_id": "string"
+      },
+      "returns": "message_id",
+      "side_effects": "SENDS EMAIL (high impact)",
+      "requires_validation": true,
+      "confidence_required": 0.9
+    },
+    {
+      "name": "messaging.send_sms",
+      "schema": {
+        "to": "phone",
+        "message": "string",
+        "tracking_id": "string"
+      },
+      "returns": "message_id",
+      "side_effects": "SENDS SMS (high impact)",
+      "requires_validation": true,
+      "confidence_required": 0.9
+    },
+    {
+      "name": "accounting.add_invoice_note",
+      "schema": {
+        "invoice_id": "string",
+        "note": "string",
+        "type": "enum[reminder_sent,payment_plan_offered,escalated,resolved]"
+      },
+      "returns": "note_id",
+      "side_effects": "writes to accounting system",
+      "confidence_required": 0.85
+    },
+    {
+      "name": "alerts.create_human_task",
+      "schema": {
+        "priority": "enum[low,medium,high,urgent]",
+        "title": "string",
+        "description": "string",
+        "invoice_id": "string",
+        "customer_id": "string"
+      },
+      "returns": "task_id",
+      "side_effects": "notifies human operator",
+      "confidence_required": 0.8
+    }
+  ],
+
+  "policy_tables": {
+    "allowed_actions": [
+      "read_invoice_data",
+      "read_customer_context",
+      "send_reminder_email",
+      "send_reminder_sms",
+      "add_invoice_note",
+      "create_human_task",
+      "generate_payment_link",
+      "track_metrics"
+    ],
+    "disallowed_actions": [
+      "modify_invoice_amounts",
+      "delete_invoices",
+      "access_payment_methods",
+      "send_legal_threats",
+      "impersonate_customer",
+      "share_customer_data_externally"
+    ],
+    "risk_thresholds": {
+      "auto_send_email_max_amount": 5000,
+      "auto_send_sms_max_amount": 2000,
+      "requires_human_review_at": 10000,
+      "escalate_to_collections_after_days": 90
+    },
+    "escalation_triggers": [
+      "invoice_amount > $10,000 AND days_overdue > 30",
+      "customer_relationship_status == 'problematic'",
+      "payment_history shows >= 3 consecutive late payments",
+      "customer requests human contact",
+      "any legal or dispute language detected"
+    ]
+  },
+
+  "deterministic_validators": [
+    {
+      "name": "validate_consent_before_messaging",
+      "rule": "BEFORE messaging.send_email OR messaging.send_sms: MUST verify consent_flags[channel] == true",
+      "severity": "CRITICAL",
+      "action_on_fail": "BLOCK + log violation + alert admin"
+    },
+    {
+      "name": "validate_invoice_still_overdue",
+      "rule": "BEFORE sending reminder: MUST re-check invoice status is still 'unpaid' or 'overdue'",
+      "severity": "HIGH",
+      "action_on_fail": "SKIP reminder + log"
+    },
+    {
+      "name": "validate_no_duplicate_reminders",
+      "rule": "MUST check last_reminder_sent_at; SKIP if sent within last 48 hours",
+      "severity": "HIGH",
+      "action_on_fail": "SKIP reminder + log"
+    },
+    {
+      "name": "validate_tone_professional",
+      "rule": "Generated message MUST NOT contain: threats, legal language, aggressive tone, caps-lock words",
+      "severity": "CRITICAL",
+      "action_on_fail": "BLOCK + flag for human review"
+    },
+    {
+      "name": "validate_amount_threshold",
+      "rule": "IF invoice_amount > risk_threshold: MUST create human_task instead of auto-send",
+      "severity": "HIGH",
+      "action_on_fail": "Escalate to human"
+    }
+  ],
+
+  "escalation_ladder": [
+    {
+      "stage": "1_friendly_reminder",
+      "days_overdue": "1-7",
+      "channel": "email",
+      "tone": "friendly, helpful",
+      "message_template": "gentle_reminder",
+      "includes": ["invoice_details", "payment_link", "support_contact"],
+      "frequency": "once at 3 days overdue"
+    },
+    {
+      "stage": "2_second_notice",
+      "days_overdue": "8-15",
+      "channel": "email + sms",
+      "tone": "professional, concerned",
+      "message_template": "second_notice",
+      "includes": ["invoice_details", "payment_link", "payment_plan_offer", "support_contact"],
+      "frequency": "once at 10 days overdue"
+    },
+    {
+      "stage": "3_final_notice",
+      "days_overdue": "16-30",
+      "channel": "email + sms + phone",
+      "tone": "firm, professional",
+      "message_template": "final_notice",
+      "includes": ["invoice_details", "payment_link", "urgency_indicator", "consequences", "support_contact"],
+      "frequency": "once at 20 days overdue"
+    },
+    {
+      "stage": "4_human_escalation",
+      "days_overdue": "31-60",
+      "channel": "human_task",
+      "action": "create_urgent_task",
+      "includes": ["full_customer_history", "payment_patterns", "relationship_status", "recommended_actions"],
+      "frequency": "immediate"
+    },
+    {
+      "stage": "5_collections_consideration",
+      "days_overdue": "61+",
+      "channel": "human_task",
+      "action": "create_critical_task",
+      "includes": ["full_audit_trail", "total_amount_at_risk", "recommendation_for_collections_or_writeoff"],
+      "frequency": "immediate"
+    }
+  ],
+
+  "message_templates": {
+    "gentle_reminder": {
+      "subject": "Friendly Reminder: Invoice #{{invoice_number}} from {{company_name}}",
+      "body": "Hi {{customer_name}},\n\nI hope this message finds you well! I wanted to send a quick reminder that invoice #{{invoice_number}} for ${{amount}} was due on {{due_date}}.\n\nI understand things can get busy, so I've included a quick payment link below:\n\n{{payment_link}}\n\nIf you've already sent payment, please disregard this message. If you have any questions or need to discuss a payment plan, feel free to reach out.\n\nThank you!\n\n{{company_name}}\n{{support_contact}}",
+      "tone_score": 0.9,
+      "approval_required": false
+    },
+    "second_notice": {
+      "subject": "Second Notice: Invoice #{{invoice_number}} - {{days_overdue}} Days Overdue",
+      "body": "Hi {{customer_name}},\n\nI'm following up on invoice #{{invoice_number}} for ${{amount}}, which is now {{days_overdue}} days past due.\n\nI want to help resolve this quickly. Here's what I can offer:\n\n• Quick payment link: {{payment_link}}\n• Payment plan options available\n• Questions? Contact us: {{support_contact}}\n\nIf there's an issue preventing payment, please let me know so we can work together on a solution.\n\nThank you for your attention to this matter.\n\n{{company_name}}",
+      "tone_score": 0.75,
+      "approval_required": false
+    },
+    "final_notice": {
+      "subject": "FINAL NOTICE: Invoice #{{invoice_number}} - Action Required",
+      "body": "{{customer_name}},\n\nThis is a final notice regarding invoice #{{invoice_number}} for ${{amount}}, which is now {{days_overdue}} days overdue.\n\nWe need to resolve this matter promptly. Please take action immediately:\n\n• Pay now: {{payment_link}}\n• Contact us to arrange payment: {{support_contact}}\n\nIf we don't hear from you within 7 days, we may need to take further action, which could affect our business relationship.\n\nWe value your partnership and hope to resolve this quickly.\n\n{{company_name}}\n{{support_contact}}",
+      "tone_score": 0.5,
+      "approval_required": true
+    }
+  },
+
+  "metrics_tracking": {
+    "real_time": [
+      "total_overdue_amount",
+      "number_of_overdue_invoices",
+      "average_days_overdue",
+      "reminders_sent_today",
+      "recovery_amount_today"
+    ],
+    "weekly_report": [
+      "DSO_change_vs_last_week",
+      "recovery_rate_percentage",
+      "average_recovery_time_days",
+      "total_recovered_amount",
+      "escalations_to_human",
+      "customer_responses_received",
+      "success_rate_by_stage"
+    ],
+    "monthly_dashboard": [
+      "total_recovered_vs_goal",
+      "DSO_trend",
+      "cost_savings_human_hours",
+      "customer_satisfaction_score",
+      "roi_calculation"
+    ]
+  },
+
+  "security_hardening": {
+    "input_validation": [
+      "Sanitize all email addresses (prevent header injection)",
+      "Validate phone numbers (E.164 format)",
+      "Escape all template variables (prevent XSS)",
+      "Rate limit per customer (max 1 reminder per 48h per channel)"
+    ],
+    "audit_logging": [
+      "Log every reminder sent (timestamp, channel, customer, invoice, message_id)",
+      "Log every validator trigger (pass/fail, reason)",
+      "Log every human escalation (trigger reason, context)",
+      "Log every customer response (for learning)"
+    ],
+    "idempotency": [
+      "Use tracking_id = invoice_id + stage + attempt_number",
+      "Check tracking_id before sending (prevent duplicates)",
+      "Store sent messages with tracking_id for 90 days"
+    ],
+    "kill_switch": {
+      "trigger_conditions": [
+        "complaint_rate > 2% in 24h",
+        "unsubscribe_rate > 5% in 24h",
+        "bounce_rate > 10%",
+        "manual admin trigger"
+      ],
+      "action": "PAUSE all auto-sends + alert admin + require manual review to resume"
+    }
+  },
+
+  "evaluation_harness": {
+    "test_scenarios": [
+      {
+        "name": "happy_path_3_day_overdue",
+        "setup": "Invoice $500, 3 days overdue, customer has good payment history",
+        "expected": "Send gentle_reminder email, log interaction, no escalation",
+        "pass_condition": "Message sent AND tone_score >= 0.85 AND no validator failures"
+      },
+      {
+        "name": "no_consent_block",
+        "setup": "Invoice $1000, 10 days overdue, customer consent_flags.can_email = false",
+        "expected": "BLOCK email send, log violation, create human_task",
+        "pass_condition": "No email sent AND violation logged AND human_task created"
+      },
+      {
+        "name": "high_amount_escalation",
+        "setup": "Invoice $15000, 5 days overdue",
+        "expected": "Skip auto-send, create human_task immediately",
+        "pass_condition": "No auto-send AND human_task created with priority=high"
+      },
+      {
+        "name": "duplicate_prevention",
+        "setup": "Invoice $800, 5 days overdue, reminder sent 24h ago",
+        "expected": "Skip reminder (too soon), log skip reason",
+        "pass_condition": "No reminder sent AND skip logged with reason='sent_within_48h'"
+      },
+      {
+        "name": "already_paid_race_condition",
+        "setup": "Invoice $600, 8 days overdue, but paid 1h ago (status=paid)",
+        "expected": "Skip reminder (no longer overdue), log skip",
+        "pass_condition": "No reminder sent AND skip logged with reason='status_not_overdue'"
+      }
+    ],
+    "acceptance_criteria": [
+      "100% pass rate on validator tests",
+      "0% false positives (reminders sent when shouldn't)",
+      "< 2% false negatives (missed reminders that should send)",
+      "100% audit log completeness",
+      "Average message generation < 3 seconds"
+    ]
+  },
+
+  "integration_points": {
+    "required_integrations": [
+      {
+        "system": "accounting",
+        "tools": ["QuickBooks", "Xero", "FreshBooks", "Stripe Invoicing"],
+        "data_needed": ["invoice_list", "invoice_details", "customer_id", "payment_status"]
+      },
+      {
+        "system": "crm",
+        "tools": ["HubSpot", "Salesforce", "Pipedrive", "Airtable"],
+        "data_needed": ["customer_context", "communication_history", "consent_flags"]
+      },
+      {
+        "system": "messaging",
+        "tools": ["SendGrid", "Twilio", "Postmark", "Mailgun"],
+        "data_needed": ["send_email", "send_sms", "track_delivery"]
+      },
+      {
+        "system": "alerts",
+        "tools": ["Slack", "Email", "SMS", "PagerDuty"],
+        "data_needed": ["create_task", "notify_human"]
+      }
+    ],
+    "oauth_flow": "Standard OAuth 2.0 for customer connections",
+    "webhook_security": "HMAC-SHA256 signature validation"
+  },
+
+  "deployment_checklist": [
+    "✅ n8n workflow built and tested",
+    "✅ All validators enabled and tested",
+    "✅ Audit logging configured",
+    "✅ Kill switch configured",
+    "✅ Test scenarios pass 100%",
+    "✅ Customer dashboard deployed",
+    "✅ Pricing page live",
+    "✅ Stripe subscription configured",
+    "✅ OAuth connections tested",
+    "✅ Legal review of message templates",
+    "✅ Terms of service updated",
+    "✅ Privacy policy updated",
+    "✅ Support documentation created",
+    "✅ Demo video recorded"
+  ]
+}
