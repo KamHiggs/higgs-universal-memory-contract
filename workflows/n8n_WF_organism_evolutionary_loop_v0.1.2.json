@@ -1,0 +1,526 @@
+{
+  "name": "Slime Mold Organism - Evolutionary Breeding Loop",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 2 * * *"
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Schedule Trigger (Daily 2am)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "content": "## Slime Mold Organism - Evolutionary Breeding Loop\n\n**Purpose:** Evolve cognitive architectures through breeding top performers\n\n**Process:**\n1. Identify top performers per tendril (top 20% by fitness)\n2. Call Python breeding engine to generate offspring\n3. Deploy offspring in shadow mode\n4. Prune poor performers (bottom 20%)\n5. Promote shadow variants that prove superior\n\n**Evolution mechanics:**\n- Crossover: Combine two parent maps (60%)\n- Mutation: Adjust parameters (35%)\n- Novel: Random exploration (5%)\n\n**Runs:** Daily at 2am\n**Safety:** All offspring deploy in shadow mode first\n**Selection:** Min 100 samples before evaluation",
+        "height": 600,
+        "width": 600
+      },
+      "id": "sticky-readme",
+      "name": "README",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-200, 180]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Get tendrils with evolutionary mode enabled\nSELECT\n  t.tendril_key,\n  t.cogni_map_id,\n  t.current_variant_id,\n  t.generation,\n  COUNT(vl.variant_id) AS active_variants,\n  bc.max_variants_per_tendril,\n  bc.max_generations\nFROM tendrils t\nLEFT JOIN organism_variant_lineage vl\n  ON vl.tendril_key = t.tendril_key\n  AND vl.survival_status = 'active'\nCROSS JOIN organism_breeding_config bc\nWHERE t.evolutionary_mode = TRUE\n  AND t.status = 'active'\n  AND t.generation < bc.max_generations\nGROUP BY t.tendril_key, t.cogni_map_id, t.current_variant_id, t.generation,\n         bc.max_variants_per_tendril, bc.max_generations\nHAVING COUNT(vl.variant_id) < bc.max_variants_per_tendril;",
+        "additionalFields": {}
+      },
+      "id": "postgres-get-evolutionary-tendrils",
+      "name": "S01: Get Evolutionary Tendrils",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [460, 300],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-main",
+          "name": "PostgreSQL Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Get top performers for this tendril\nSELECT * FROM select_top_performers(\n  $1::TEXT,  -- tendril_key\n  $2::NUMERIC, -- top_percentile\n  $3::INT    -- min_sample_size\n);",
+        "additionalFields": {
+          "queryParameters": "={{ [$json.tendril_key, 20.0, 100] }}"
+        }
+      },
+      "id": "postgres-get-top-performers",
+      "name": "S02: Get Top Performers",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [680, 300],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-main",
+          "name": "PostgreSQL Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Get full cogni maps for top performers\nSELECT\n  vl.variant_id,\n  vl.cogni_map_id,\n  cm.map_json,\n  cm.map_id,\n  vl.fitness_score\nFROM organism_variant_lineage vl\nJOIN organism_cogni_map_library cm ON vl.cogni_map_id = cm.map_id\nWHERE vl.variant_id = ANY($1::TEXT[]);",
+        "additionalFields": {
+          "queryParameters": "={{ [($input.all().map(i => i.json.variant_id))] }}"
+        }
+      },
+      "id": "postgres-load-parent-maps",
+      "name": "S03: Load Parent Maps",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [900, 300],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-main",
+          "name": "PostgreSQL Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM organism_breeding_config WHERE tenant_id = 'default' LIMIT 1;",
+        "additionalFields": {}
+      },
+      "id": "postgres-load-breeding-config",
+      "name": "S04: Load Breeding Config",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [1120, 300],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-main",
+          "name": "PostgreSQL Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "command": "python3",
+        "arguments": "-c",
+        "codeInput": "={{ $json.python_code }}",
+        "options": {}
+      },
+      "id": "execute-command-breed",
+      "name": "S05: Call Breeding Engine",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [1340, 300],
+      "notes": "Calls slimemold_breeding_engine.py to generate offspring"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare Python breeding call\nconst parentMaps = $input.all().slice(0, -2).map(i => i.json.map_json);\nconst breedingConfig = $input.all().slice(-1)[0].json;\nconst tendrils = $input.first().json;\n\nconst pythonCode = `\nimport sys\nimport json\nsys.path.append('/home/user/higgs-universal-memory-contract')\nfrom slimemold_breeding_engine import breed_variants\n\nparent_maps = ${JSON.stringify(parentMaps)}\nbreeding_config = ${JSON.stringify(breedingConfig)}\ngeneration = ${tendrils.generation + 1}\n\noffspring = breed_variants(parent_maps, breeding_config, generation)\nprint(json.dumps(offspring))\n`;\n\nreturn {\n  python_code: pythonCode,\n  tendril_key: tendrils.tendril_key,\n  generation: tendrils.generation + 1\n};"
+      },
+      "id": "code-prepare-breeding",
+      "name": "S04b: Prepare Breeding Call",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 400],
+      "notes": "Bridges n8n data to Python breeding engine"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse offspring from Python output\nconst output = $input.first().json.stdout;\nconst offspring = JSON.parse(output);\n\nconst tendrils = $input.all()[1].json;\n\nreturn offspring.map(variant => ({\n  json: {\n    ...variant,\n    tendril_key: tendrils.tendril_key\n  }\n}));"
+      },
+      "id": "code-parse-offspring",
+      "name": "S06: Parse Offspring",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1560, 300]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "schema": {
+          "__rl": true,
+          "value": "public",
+          "mode": "list"
+        },
+        "table": {
+          "__rl": true,
+          "value": "organism_cogni_map_library",
+          "mode": "list"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "map_id": "={{ $json.map_id }}",
+            "map_name": "={{ $json.cogni_map.map_name }}",
+            "version": "={{ $json.cogni_map.version }}",
+            "category": "evolved_variant",
+            "map_json": "={{ JSON.stringify($json.cogni_map) }}",
+            "map_hash": "={{ $json.map_hash }}",
+            "source": "slime_mold_organism",
+            "created_by": "evolutionary_breeding",
+            "is_variant": true,
+            "parent_map_ids": "={{ $json.parent_map_ids }}",
+            "generation": "={{ $json.generation }}",
+            "mutations": "={{ JSON.stringify($json.mutations) }}"
+          }
+        },
+        "options": {
+          "skipOnConflict": true
+        }
+      },
+      "id": "postgres-insert-map-library",
+      "name": "S07: Insert to Map Library",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [1780, 300],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-main",
+          "name": "PostgreSQL Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "schema": {
+          "__rl": true,
+          "value": "public",
+          "mode": "list"
+        },
+        "table": {
+          "__rl": true,
+          "value": "organism_variant_lineage",
+          "mode": "list"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "variant_id": "={{ $json.variant_id }}",
+            "cogni_map_id": "={{ $json.map_id }}",
+            "tendril_key": "={{ $json.tendril_key }}",
+            "generation": "={{ $json.generation }}",
+            "parent_variant_ids": "={{ [] }}",
+            "parent_map_ids": "={{ $json.parent_map_ids }}",
+            "breeding_method": "={{ $json.breeding_method }}",
+            "mutations": "={{ JSON.stringify($json.mutations) }}",
+            "deployment_mode": "shadow",
+            "survival_status": "active"
+          }
+        },
+        "options": {}
+      },
+      "id": "postgres-insert-variant-lineage",
+      "name": "S08: Insert to Variant Lineage",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [2000, 300],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-main",
+          "name": "PostgreSQL Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "schema": {
+          "__rl": true,
+          "value": "public",
+          "mode": "list"
+        },
+        "table": {
+          "__rl": true,
+          "value": "organism_shadow_deployments",
+          "mode": "list"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "deployment_id": "={{ $json.variant_id + '_shadow_' + Date.now() }}",
+            "variant_id": "={{ $json.variant_id }}",
+            "cogni_map_id": "={{ $json.map_id }}",
+            "tendril_key": "={{ $json.tendril_key }}",
+            "shadow_mode": "observe",
+            "hypothesis": "={{ 'Testing variant gen' + $json.generation + ' with ' + $json.breeding_method }}",
+            "success_criteria": "={{ JSON.stringify({min_sample_size: 100, min_nutrient_improvement: 10}) }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "postgres-create-shadow-deployment",
+      "name": "S09: Create Shadow Deployment",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [2220, 300],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-main",
+          "name": "PostgreSQL Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Prune poor performers\nSELECT prune_poor_performers(\n  $1::TEXT,    -- tendril_key\n  $2::NUMERIC, -- bottom_percentile\n  $3::INT      -- min_sample_size\n) AS pruned_count;",
+        "additionalFields": {
+          "queryParameters": "={{ [$input.first().json.tendril_key, 20.0, 100] }}"
+        }
+      },
+      "id": "postgres-prune-poor-performers",
+      "name": "S10: Prune Poor Performers",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [2440, 300],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-main",
+          "name": "PostgreSQL Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Check for shadow variants ready for promotion\nSELECT\n  sd.deployment_id,\n  sd.variant_id,\n  sd.cogni_map_id,\n  sd.tendril_key,\n  vl.sample_size,\n  vl.fitness_score,\n  vl.nutrient_mean,\n  (sd.success_criteria->>'min_sample_size')::INT AS min_sample_needed,\n  (sd.success_criteria->>'min_nutrient_improvement')::NUMERIC AS min_lift_needed\nFROM organism_shadow_deployments sd\nJOIN organism_variant_lineage vl ON sd.variant_id = vl.variant_id\nWHERE sd.conclusion IS NULL\n  AND sd.shadow_mode = 'observe'\n  AND vl.sample_size >= (sd.success_criteria->>'min_sample_size')::INT\nORDER BY vl.fitness_score DESC;",
+        "additionalFields": {}
+      },
+      "id": "postgres-check-promotion-candidates",
+      "name": "S11: Check Promotion Candidates",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [2660, 300],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-main",
+          "name": "PostgreSQL Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Evaluate promotion candidates\nconst items = $input.all();\nconst promotions = [];\n\nfor (const item of items) {\n  const data = item.json;\n  \n  // Get control variant (current production) fitness\n  // TODO: Query control variant fitness\n  const controlFitness = 100; // Placeholder\n  \n  const lift = ((data.fitness_score - controlFitness) / controlFitness) * 100;\n  \n  if (lift >= data.min_lift_needed) {\n    promotions.push({\n      deployment_id: data.deployment_id,\n      variant_id: data.variant_id,\n      tendril_key: data.tendril_key,\n      conclusion: 'promote',\n      lift_vs_control: lift.toFixed(2),\n      decided_by: 'organism_auto',\n      decision_notes: `Fitness score ${data.fitness_score.toFixed(2)} exceeds control by ${lift.toFixed(1)}%`\n    });\n  }\n}\n\nreturn promotions.map(p => ({ json: p }));"
+      },
+      "id": "code-evaluate-promotions",
+      "name": "S12: Evaluate Promotions",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2880, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Promote variant\nBEGIN;\n\n-- Update shadow deployment\nUPDATE organism_shadow_deployments\nSET conclusion = $1,\n    lift_vs_control = $2,\n    decided_at = NOW(),\n    decided_by = $3,\n    decision_notes = $4,\n    actual_end_at = NOW()\nWHERE deployment_id = $5;\n\n-- Promote variant to production\nUPDATE organism_variant_lineage\nSET deployment_mode = 'production',\n    promoted_at = NOW(),\n    survival_status = 'promoted'\nWHERE variant_id = $6;\n\n-- Update tendril to use new variant\nUPDATE tendrils\nSET current_variant_id = $6,\n    generation = generation + 1,\n    updated_at = NOW()\nWHERE tendril_key = $7;\n\nCOMMIT;",
+        "additionalFields": {
+          "queryParameters": "={{ [\n  $json.conclusion,\n  $json.lift_vs_control,\n  $json.decided_by,\n  $json.decision_notes,\n  $json.deployment_id,\n  $json.variant_id,\n  $json.tendril_key\n] }}"
+        }
+      },
+      "id": "postgres-promote-variant",
+      "name": "S13: Promote Variant to Production",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [3100, 300],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-main",
+          "name": "PostgreSQL Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Emit summary\nconst items = $input.all();\n\nconst summary = {\n  run_timestamp: new Date().toISOString(),\n  evolutionary_tendrils_processed: items.length,\n  offspring_generated: items.reduce((sum, i) => sum + (i.json.offspring_count || 0), 0),\n  variants_pruned: items.reduce((sum, i) => sum + (i.json.pruned_count || 0), 0),\n  variants_promoted: items.reduce((sum, i) => sum + (i.json.promoted_count || 0), 0)\n};\n\nconsole.log('🧬 Evolutionary loop summary:', JSON.stringify(summary, null, 2));\n\nreturn { json: summary };"
+      },
+      "id": "code-emit-summary",
+      "name": "S14: Emit Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3320, 300]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger (Daily 2am)": {
+      "main": [
+        [
+          {
+            "node": "S01: Get Evolutionary Tendrils",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "S01: Get Evolutionary Tendrils": {
+      "main": [
+        [
+          {
+            "node": "S02: Get Top Performers",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "S02: Get Top Performers": {
+      "main": [
+        [
+          {
+            "node": "S03: Load Parent Maps",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "S03: Load Parent Maps": {
+      "main": [
+        [
+          {
+            "node": "S04: Load Breeding Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "S04: Load Breeding Config": {
+      "main": [
+        [
+          {
+            "node": "S04b: Prepare Breeding Call",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "S04b: Prepare Breeding Call": {
+      "main": [
+        [
+          {
+            "node": "S05: Call Breeding Engine",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "S05: Call Breeding Engine": {
+      "main": [
+        [
+          {
+            "node": "S06: Parse Offspring",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "S06: Parse Offspring": {
+      "main": [
+        [
+          {
+            "node": "S07: Insert to Map Library",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "S07: Insert to Map Library": {
+      "main": [
+        [
+          {
+            "node": "S08: Insert to Variant Lineage",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "S08: Insert to Variant Lineage": {
+      "main": [
+        [
+          {
+            "node": "S09: Create Shadow Deployment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "S09: Create Shadow Deployment": {
+      "main": [
+        [
+          {
+            "node": "S10: Prune Poor Performers",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "S10: Prune Poor Performers": {
+      "main": [
+        [
+          {
+            "node": "S11: Check Promotion Candidates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "S11: Check Promotion Candidates": {
+      "main": [
+        [
+          {
+            "node": "S12: Evaluate Promotions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "S12: Evaluate Promotions": {
+      "main": [
+        [
+          {
+            "node": "S13: Promote Variant to Production",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "S13: Promote Variant to Production": {
+      "main": [
+        [
+          {
+            "node": "S14: Emit Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2026-01-12T00:00:00.000Z",
+  "versionId": "0.1.2"
+}
