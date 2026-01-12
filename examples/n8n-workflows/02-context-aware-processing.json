@@ -1,0 +1,157 @@
+{
+  "name": "Context-Aware Data Processing",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "process-data",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300],
+      "webhookId": "process-data"
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:8000/request_context",
+        "method": "POST",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "session_id",
+              "value": "={{ $json.project_id || 'default' }}"
+            },
+            {
+              "name": "semantic_query",
+              "value": "What are the processing rules for this project?"
+            },
+            {
+              "name": "window_size",
+              "value": 10
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-context",
+      "name": "Get UMC Context",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process data using context from UMC\nconst inputData = $input.first().json;\nconst context = $('Get UMC Context').first().json;\n\n// Extract processing rules from context\nconst rules = context.context_blocks || [];\nconst processingRules = rules\n  .filter(block => block.event_type === 'processing_rule')\n  .map(block => block.content);\n\n// Apply rules to input data\nlet processedData = { ...inputData };\n\nfor (const rule of processingRules) {\n  // Example: Apply transformation rules\n  // This is where you'd implement your business logic\n  console.log('Applying rule:', rule);\n}\n\nreturn {\n  json: {\n    original: inputData,\n    processed: processedData,\n    rules_applied: processingRules.length,\n    timestamp: new Date().toISOString()\n  }\n};"
+      },
+      "id": "process-with-context",
+      "name": "Process with Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:8000/save_note",
+        "method": "POST",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "session_id",
+              "value": "={{ $('Webhook').first().json.project_id || 'default' }}"
+            },
+            {
+              "name": "event_type",
+              "value": "data_processed"
+            },
+            {
+              "name": "content",
+              "value": "={{ 'Processed ' + $json.rules_applied + ' rules for data processing' }}"
+            },
+            {
+              "name": "metadata",
+              "value": "={{ { \"timestamp\": $json.timestamp, \"result\": $json.processed } }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "log-processing",
+      "name": "Log to UMC",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}"
+      },
+      "id": "respond-to-webhook",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1050, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Get UMC Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get UMC Context": {
+      "main": [
+        [
+          {
+            "node": "Process with Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process with Context": {
+      "main": [
+        [
+          {
+            "node": "Log to UMC",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log to UMC": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2026-01-10T00:00:00.000Z",
+  "versionId": "1"
+}

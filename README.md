@@ -21,7 +21,33 @@ Status: Draft-Stable
 
 UMC is memory infrastructure you control — not memory locked inside a vendor.
 
+## Integrations
 
+### n8n-MCP: AI-Driven Workflow Automation
+
+The UMC now includes integration with [n8n-MCP](https://github.com/czlonkowski/n8n-mcp), a Model Context Protocol server that enables Claude to build and manage n8n workflows with access to 1,084+ automation nodes.
+
+**Combined Benefits:**
+- Claude can retrieve project context from UMC before building workflows
+- n8n workflows can log events and retrieve memory from UMC
+- Create context-aware automation that remembers project requirements
+- Full audit trail of workflow creation and execution decisions
+
+**Quick Setup:**
+```bash
+# Start UMC memory server
+cd middleware && python umc_memory_server.py
+
+# Configure n8n-MCP in Claude Desktop
+# See: docs/n8n-mcp-integration.md for full setup guide
+```
+
+**Learn More:**
+- [n8n-MCP Integration Guide](./docs/n8n-mcp-integration.md)
+- [Example Workflows](./examples/n8n-workflows/)
+- [n8n-MCP GitHub](https://github.com/czlonkowski/n8n-mcp)
+
+---
 
 Maintainers: Kamden Higgs • Higgs AI
 

@@ -1,0 +1,68 @@
+{
+  "name": "Basic UMC Logging Workflow",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "manual-trigger",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:8000/save_note",
+        "method": "POST",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "session_id",
+              "value": "demo-workflow"
+            },
+            {
+              "name": "event_type",
+              "value": "workflow_executed"
+            },
+            {
+              "name": "content",
+              "value": "Workflow executed successfully at {{ $now.format('YYYY-MM-DD HH:mm:ss') }}"
+            },
+            {
+              "name": "metadata",
+              "value": "={{ { \"execution_id\": $execution.id, \"mode\": $execution.mode } }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "save-to-umc",
+      "name": "Save to UMC",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [450, 300]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Save to UMC",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2026-01-10T00:00:00.000Z",
+  "versionId": "1"
+}

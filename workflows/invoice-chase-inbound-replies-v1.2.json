@@ -1,0 +1,445 @@
+{
+  "name": "Invoice Chase - Inbound Reply Handler",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "inbound-replies",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [240, 300],
+      "webhookId": "inbound-replies"
+    },
+    {
+      "parameters": {
+        "content": "## Inbound Reply Handler\n\n**Purpose:** Process customer replies to payment reminders\n\n**Sources:**\n- SendGrid Inbound Parse (email replies)\n- Twilio SMS webhook (SMS replies)\n\n**Intents detected:**\n- STOP / UNSUBSCRIBE → suppress\n- PAID / \"I paid\" → verify payment\n- DISPUTE → escalate\n- PROMISE_TO_PAY → set promise date\n- HELP / ? → customer inquiry\n\n**Setup SendGrid Inbound Parse:**\n1. SendGrid → Settings → Inbound Parse\n2. Add: inbound.yourdomain.com → https://your-n8n.com/webhook/inbound-replies\n3. Configure MX records\n\n**Setup Twilio:**\n1. Twilio → Phone Numbers → Your Number\n2. Messaging → Webhook → https://your-n8n.com/webhook/inbound-replies\n3. HTTP POST",
+        "height": 560,
+        "width": 600
+      },
+      "id": "sticky-readme",
+      "name": "README",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-200, 180]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse inbound message (email or SMS)\nconst body = $input.item.json.body;\nconst headers = $input.item.json.headers;\n\nlet source, sender, messageBody;\n\n// Detect source (SendGrid Inbound Parse vs Twilio)\nif (body.from && body.text) {\n  // SendGrid Inbound Parse format\n  source = 'email';\n  sender = body.from;\n  messageBody = body.text || body.html || '';\n} else if (body.From && body.Body) {\n  // Twilio SMS format\n  source = 'sms';\n  sender = body.From;\n  messageBody = body.Body;\n} else {\n  source = 'unknown';\n  sender = null;\n  messageBody = '';\n}\n\nreturn {\n  source: source,\n  sender: sender,\n  message_body: messageBody.toLowerCase(),\n  raw_body: body\n};"
+      },
+      "id": "code-parse",
+      "name": "Parse Inbound Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Classify intent from message body\nconst message = $input.item.json.message_body;\n\nlet intent = 'unknown';\nlet confidence = 0;\n\n// STOP / UNSUBSCRIBE\nif (message.match(/\\b(stop|unsubscribe|opt out|remove me)\\b/i)) {\n  intent = 'STOP';\n  confidence = 0.95;\n}\n// PAID\nelse if (message.match(/\\b(paid|payment sent|already paid|sent payment)\\b/i)) {\n  intent = 'PAID';\n  confidence = 0.85;\n}\n// DISPUTE\nelse if (message.match(/\\b(dispute|disagree|incorrect|wrong amount|never received)\\b/i)) {\n  intent = 'DISPUTE';\n  confidence = 0.80;\n}\n// PROMISE TO PAY (with date detection)\nelse if (message.match(/\\b(will pay|pay by|pay on|pay next week)\\b/i)) {\n  intent = 'PROMISE_TO_PAY';\n  confidence = 0.75;\n  \n  // Try to extract date\n  const dateMatch = message.match(/\\b(\\d{1,2}[\\/\\-]\\d{1,2}[\\/\\-]\\d{2,4})\\b/);\n  if (dateMatch) {\n    item.promise_date = dateMatch[1];\n  }\n}\n// HELP\nelse if (message.match(/\\b(help|question|\\?)\\b/i)) {\n  intent = 'HELP';\n  confidence = 0.70;\n}\n\nconst item = $input.item.json;\nitem.intent = intent;\nitem.confidence = confidence;\n\nreturn item;"
+      },
+      "id": "code-classify",
+      "name": "Classify Intent",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.intent }}",
+                    "rightValue": "STOP",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "stop"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "intent-paid",
+                    "leftValue": "={{ $json.intent }}",
+                    "rightValue": "PAID",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "paid"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "intent-dispute",
+                    "leftValue": "={{ $json.intent }}",
+                    "rightValue": "DISPUTE",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "dispute"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "intent-promise",
+                    "leftValue": "={{ $json.intent }}",
+                    "rightValue": "PROMISE_TO_PAY",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "promise"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "id": "switch-intent",
+      "name": "Route by Intent",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO suppression_list (tenant_id, email, phone, email_suppressed, sms_suppressed, reason, updated_at)\nVALUES ('default', $1, $2, $3, $4, 'customer_stop_request', NOW())\nON CONFLICT (tenant_id, COALESCE(email, phone))\nDO UPDATE SET\n  email_suppressed = CASE WHEN $3 THEN true ELSE suppression_list.email_suppressed END,\n  sms_suppressed = CASE WHEN $4 THEN true ELSE suppression_list.sms_suppressed END,\n  reason = 'customer_stop_request',\n  updated_at = NOW();",
+        "additionalFields": {
+          "queryParameters": "={{ [\n  $json.source === 'email' ? $json.sender : null,\n  $json.source === 'sms' ? $json.sender : null,\n  $json.source === 'email',\n  $json.source === 'sms'\n] }}"
+        }
+      },
+      "id": "postgres-stop",
+      "name": "Add to Suppression (STOP)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [1120, 140],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-main",
+          "name": "PostgreSQL Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "schema": {
+          "__rl": true,
+          "value": "public",
+          "mode": "list"
+        },
+        "table": {
+          "__rl": true,
+          "value": "human_tasks",
+          "mode": "list"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "tenant_id": "default",
+            "priority": "normal",
+            "task_type": "customer_claims_paid",
+            "title": "Customer Claims Payment Sent",
+            "description": "={{ 'Customer ' + $json.sender + ' claims they paid. Verify payment and update invoice status.' }}",
+            "status": "open"
+          }
+        },
+        "options": {}
+      },
+      "id": "postgres-task-paid",
+      "name": "Create Task (Verify Payment)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [1120, 260],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-main",
+          "name": "PostgreSQL Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "schema": {
+          "__rl": true,
+          "value": "public",
+          "mode": "list"
+        },
+        "table": {
+          "__rl": true,
+          "value": "human_tasks",
+          "mode": "list"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "tenant_id": "default",
+            "priority": "high",
+            "task_type": "customer_dispute",
+            "title": "Customer Dispute",
+            "description": "={{ 'DISPUTE from ' + $json.sender + ': ' + $json.message_body }}",
+            "status": "open"
+          }
+        },
+        "options": {}
+      },
+      "id": "postgres-task-dispute",
+      "name": "Create Task (Dispute)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [1120, 380],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-main",
+          "name": "PostgreSQL Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Create promise to pay record\nconst item = $input.item.json;\n\n// TODO: Parse promise_date properly\nconst promiseDate = item.promise_date || new Date(Date.now() + 7*24*60*60*1000).toISOString().split('T')[0]; // Default: 7 days\n\nreturn {\n  tenant_id: 'default',\n  invoice_id: 'UNKNOWN', // TODO: Map sender to invoice\n  customer_id: 'UNKNOWN',\n  promise_date: promiseDate,\n  note: `Customer promised via ${item.source}: ${item.message_body}`\n};"
+      },
+      "id": "code-promise",
+      "name": "Prepare Promise Record",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 500]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "schema": {
+          "__rl": true,
+          "value": "public",
+          "mode": "list"
+        },
+        "table": {
+          "__rl": true,
+          "value": "human_tasks",
+          "mode": "list"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "tenant_id": "default",
+            "priority": "normal",
+            "task_type": "customer_inquiry",
+            "title": "Customer Inquiry / Help Request",
+            "description": "={{ 'From ' + $json.sender + ': ' + $json.message_body }}",
+            "status": "open"
+          }
+        },
+        "options": {}
+      },
+      "id": "postgres-task-help",
+      "name": "Create Task (Help)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [1120, 620]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ {\"status\": \"received\", \"intent\": $json.intent} }}"
+      },
+      "id": "respond",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1340, 300]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Parse Inbound Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Inbound Message": {
+      "main": [
+        [
+          {
+            "node": "Classify Intent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify Intent": {
+      "main": [
+        [
+          {
+            "node": "Route by Intent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by Intent": {
+      "main": [
+        [
+          {
+            "node": "Add to Suppression (STOP)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create Task (Verify Payment)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create Task (Dispute)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Promise Record",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create Task (Help)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add to Suppression (STOP)": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Task (Verify Payment)": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Task (Dispute)": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Promise Record": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Task (Help)": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2026-01-11T21:30:00.000Z",
+  "versionId": "1.2.0"
+}

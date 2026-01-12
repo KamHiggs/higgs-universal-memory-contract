@@ -1,0 +1,258 @@
+{
+  "name": "Invoice Chase - Producer (Fetch + Enqueue)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "trigger-manual",
+      "name": "Manual Trigger (Dev)",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "notes": "Switch to Schedule Trigger for production"
+    },
+    {
+      "parameters": {
+        "content": "## Invoice Chase - Producer\n\n**Purpose:** Fetch overdue invoices and enqueue for worker processing\n\n**This workflow:**\n1. Fetches overdue invoices from accounting system\n2. Normalizes data (cents, dates, days_overdue)\n3. Writes to invoice_queue table\n4. Emits summary metrics\n\n**Fast and safe:**\n- No sending (workers handle that)\n- Idempotent queue inserts\n- Handles 10k+ invoices without timeout\n\n**Production mode:**\n- Replace Manual Trigger with Schedule Trigger (daily 9am)\n- Set USE_SAMPLE_DATA=false\n- Monitor audit_events",
+        "height": 500,
+        "width": 600
+      },
+      "id": "sticky-readme",
+      "name": "README",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-200, 180]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Load tenant context and workflow execution ID\nconst tenantId = $env.TENANT_ID;\nconst clientLabel = $env.CLIENT_LABEL;\nconst useSampleData = $env.USE_SAMPLE_DATA === 'true';\nconst workflowExecutionId = $executionId;\n\nreturn {\n  tenant_id: tenantId,\n  client_label: clientLabel,\n  use_sample_data: useSampleData,\n  workflow_execution_id: workflowExecutionId,\n  run_started_at: new Date().toISOString()\n};"
+      },
+      "id": "code-load-context",
+      "name": "S00: Load Tenant Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.use_sample_data}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-sample-mode",
+      "name": "Use Sample Data?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Sample overdue invoices for testing\nconst sampleInvoices = [\n  {\n    invoice_id: \"INV-TEST-001\",\n    invoice_number: \"2024-001\",\n    customer_id: \"CUST-001\",\n    customer_name: \"Acme Corp\",\n    customer_email: \"billing@acme.com\",\n    customer_phone: \"+15551234567\",\n    amount_total: 1500.00,\n    amount_due: 1500.00,\n    currency: \"USD\",\n    due_date: \"2024-01-01\",\n    status: \"overdue\",\n    payment_link: \"https://pay.example.com/inv-001\"\n  },\n  {\n    invoice_id: \"INV-TEST-002\",\n    invoice_number: \"2024-002\",\n    customer_id: \"CUST-002\",\n    customer_name: \"TechStart Inc\",\n    customer_email: \"accounts@techstart.com\",\n    customer_phone: \"+15559876543\",\n    amount_total: 3200.00,\n    amount_due: 3200.00,\n    currency: \"USD\",\n    due_date: \"2024-01-05\",\n    status: \"overdue\",\n    payment_link: \"https://pay.example.com/inv-002\"\n  },\n  {\n    invoice_id: \"INV-TEST-003\",\n    invoice_number: \"2024-003\",\n    customer_id: \"CUST-003\",\n    customer_name: \"BigClient LLC\",\n    customer_email: \"finance@bigclient.com\",\n    customer_phone: \"+15552223333\",\n    amount_total: 15000.00,\n    amount_due: 15000.00,\n    currency: \"USD\",\n    due_date: \"2023-12-20\",\n    status: \"overdue\",\n    payment_link: \"https://pay.example.com/inv-003\"\n  }\n];\n\nreturn sampleInvoices.map(inv => ({ json: inv }));"
+      },
+      "id": "code-sample-data",
+      "name": "Load Sample Invoices",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 200]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{$env.ACCOUNTING_API_URL}}/invoices",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "status",
+              "value": "overdue"
+            },
+            {
+              "name": "orderBy",
+              "value": "dueDate"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "http-get-invoices",
+      "name": "Fetch Real Invoices",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [900, 400],
+      "notes": "TODO: Configure your accounting system credentials"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Normalize invoice data and compute days_overdue\nconst items = $input.all();\nconst context = items[0].json; // First item has context\nconst defaultTz = $env.DEFAULT_TIMEZONE || 'America/Los_Angeles';\n\nconst normalized = [];\n\nfor (const item of items.slice(1)) { // Skip context item\n  const invoice = item.json;\n  \n  // Convert amounts to cents (integer)\n  const amountTotalCents = Math.round((invoice.amount_total || 0) * 100);\n  const amountDueCents = Math.round((invoice.amount_due || invoice.amount_total || 0) * 100);\n  \n  // Compute days_overdue\n  const dueDate = new Date(invoice.due_date);\n  const now = new Date();\n  const daysOverdue = Math.floor((now - dueDate) / (1000 * 60 * 60 * 24));\n  \n  // Skip if not actually overdue\n  if (daysOverdue < 1) {\n    console.log(`Skipping ${invoice.invoice_id}: not overdue (${daysOverdue} days)`);\n    continue;\n  }\n  \n  normalized.push({\n    tenant_id: context.tenant_id,\n    invoice_id: invoice.invoice_id,\n    invoice_number: invoice.invoice_number,\n    customer_id: invoice.customer_id,\n    customer_name: invoice.customer_name,\n    customer_email: invoice.customer_email || null,\n    customer_phone: invoice.customer_phone || null,\n    currency: invoice.currency || 'USD',\n    amount_total_cents: amountTotalCents,\n    amount_due_cents: amountDueCents,\n    due_date: invoice.due_date,\n    status: invoice.status,\n    payment_link: invoice.payment_link || null,\n    days_overdue: daysOverdue\n  });\n}\n\nreturn normalized.map(inv => ({ json: inv }));"
+      },
+      "id": "code-normalize",
+      "name": "S01: Normalize + Compute Days Overdue",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO invoice_queue (tenant_id, invoice_id, status, created_at, updated_at)\nVALUES ($1, $2, 'queued', NOW(), NOW())\nON CONFLICT (tenant_id, invoice_id) \nDO UPDATE SET \n  status = CASE \n    WHEN invoice_queue.status = 'done' THEN 'queued' \n    ELSE invoice_queue.status \n  END,\n  updated_at = NOW()\nRETURNING id, status;",
+        "additionalFields": {
+          "queryParameters": "={{ [$json.tenant_id, $json.invoice_id] }}"
+        }
+      },
+      "id": "postgres-enqueue",
+      "name": "S02: Enqueue Invoice (Idempotent)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [1340, 300],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-main",
+          "name": "PostgreSQL Account"
+        }
+      },
+      "notes": "Idempotent: won't re-queue if already queued/processing"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO audit_events (tenant_id, client_label, event_type, sev, workflow_execution_id, node_name, redacted_context_json)\nVALUES ($1, $2, 'producer_enqueued', 'info', $3, 'S02_enqueue', jsonb_build_object('invoice_id', $4, 'invoice_number', $5, 'days_overdue', $6));",
+        "additionalFields": {
+          "queryParameters": "={{ [$json.tenant_id, $input.first().json.client_label, $input.first().json.workflow_execution_id, $json.invoice_id, $json.invoice_number, $json.days_overdue] }}"
+        }
+      },
+      "id": "postgres-audit",
+      "name": "S03: Audit Enqueue",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [1560, 300],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-main",
+          "name": "PostgreSQL Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Aggregate run summary\nconst items = $input.all();\n\nconst summary = {\n  run_id: items[0].json.workflow_execution_id,\n  tenant_id: items[0].json.tenant_id,\n  invoices_processed: items.length,\n  enqueued_count: items.filter(i => i.json.status === 'queued').length,\n  completed_at: new Date().toISOString()\n};\n\nconsole.log('Producer run summary:', JSON.stringify(summary, null, 2));\n\nreturn [{ json: summary }];"
+      },
+      "id": "code-summary",
+      "name": "S04: Emit Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1780, 300]
+    }
+  ],
+  "connections": {
+    "Manual Trigger (Dev)": {
+      "main": [
+        [
+          {
+            "node": "S00: Load Tenant Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "S00: Load Tenant Context": {
+      "main": [
+        [
+          {
+            "node": "Use Sample Data?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Use Sample Data?": {
+      "main": [
+        [
+          {
+            "node": "Load Sample Invoices",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Fetch Real Invoices",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Sample Invoices": {
+      "main": [
+        [
+          {
+            "node": "S01: Normalize + Compute Days Overdue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Real Invoices": {
+      "main": [
+        [
+          {
+            "node": "S01: Normalize + Compute Days Overdue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "S01: Normalize + Compute Days Overdue": {
+      "main": [
+        [
+          {
+            "node": "S02: Enqueue Invoice (Idempotent)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "S02: Enqueue Invoice (Idempotent)": {
+      "main": [
+        [
+          {
+            "node": "S03: Audit Enqueue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "S03: Audit Enqueue": {
+      "main": [
+        [
+          {
+            "node": "S04: Emit Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2026-01-11T20:30:00.000Z",
+  "versionId": "1.2.0"
+}

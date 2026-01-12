@@ -1,0 +1,333 @@
+{
+  "name": "Slime Mold Organism - Core Brain Loop (w/ Variant Tracking)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 * * * *"
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Schedule Trigger (Hourly)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "content": "## Slime Mold Organism - Core Brain Loop v0.1.2\n\n**Purpose:** Reinforcement learning brain that allocates resources\n\n**Process:**\n1. Rollup nutrient from organism_events (last hour)\n2. Update pheromone weights (reinforcement + decay)\n3. Select thick paths (top nutrient tendrils)\n4. Queue actions for thick paths\n5. Track variant performance (if evolutionary_mode)\n\n**NEW in v0.1.2:**\n- Tracks per-variant nutrient outcomes\n- Updates organism_variant_lineage fitness scores\n- Shadow mode variants collect stats without affecting production\n\n**Runs:** Every hour\n**Algorithm:** Pheromone-based reinforcement\n**Nutrient:** revenue - cost - penalty",
+        "height": 600,
+        "width": 600
+      },
+      "id": "sticky-readme",
+      "name": "README",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-200, 180]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Rollup nutrient from organism_events (last hour)\nSELECT\n  tendril_key,\n  variant_id,\n  COUNT(*) AS event_count,\n  SUM(nutrient_usd) AS nutrient_usd,\n  SUM(revenue_usd) AS revenue_usd,\n  SUM(cost_usd) AS cost_usd,\n  SUM(penalty_usd) AS penalty_usd,\n  AVG(nutrient_usd) AS avg_nutrient_usd\nFROM organism_events\nWHERE created_at >= NOW() - INTERVAL '1 hour'\nGROUP BY tendril_key, variant_id\nORDER BY nutrient_usd DESC;",
+        "additionalFields": {}
+      },
+      "id": "postgres-rollup-nutrient",
+      "name": "S01: Rollup Nutrient (Last Hour)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [460, 300],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-main",
+          "name": "PostgreSQL Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Update pheromone weights with reinforcement + decay\nconst items = $input.all();\nconst alpha = 0.1; // Reinforcement rate\nconst decay = 0.05; // Decay rate (5% per hour)\n\nconst updates = [];\n\nfor (const item of items) {\n  const data = item.json;\n  \n  // Reinforcement: $100 nutrient -> +alpha\n  const reinforcement = alpha * (data.nutrient_usd / 100.0);\n  \n  // New weight = (old_weight * (1 - decay)) + reinforcement\n  // We'll load old weight from DB and compute new weight\n  \n  updates.push({\n    tendril_key: data.tendril_key,\n    nutrient_usd: data.nutrient_usd,\n    event_count: data.event_count,\n    reinforcement: reinforcement.toFixed(4)\n  });\n}\n\nreturn updates.map(u => ({ json: u }));"
+      },
+      "id": "code-compute-reinforcement",
+      "name": "S02: Compute Reinforcement",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Update pheromone weight with reinforcement + decay\nUPDATE tendrils\nSET\n  pheromone_weight = GREATEST(\n    0.05,  -- Min weight\n    (pheromone_weight * 0.95) + $2::NUMERIC  -- Decay 5% + reinforcement\n  ),\n  last_nutrient_usd = $3,\n  last_reinforcement_at = NOW(),\n  updated_at = NOW()\nWHERE tendril_key = $1\nRETURNING tendril_key, pheromone_weight, last_nutrient_usd;",
+        "additionalFields": {
+          "queryParameters": "={{ [$json.tendril_key, $json.reinforcement, $json.nutrient_usd] }}"
+        }
+      },
+      "id": "postgres-update-pheromone",
+      "name": "S03: Update Pheromone Weights",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [900, 300],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-main",
+          "name": "PostgreSQL Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Update variant lineage fitness scores\nWITH variant_stats AS (\n  SELECT\n    meta_json->>'variant_id' AS variant_id,\n    COUNT(*) AS new_samples,\n    SUM(nutrient_usd) AS new_nutrient,\n    AVG(nutrient_usd) AS new_avg_nutrient,\n    STDDEV(nutrient_usd) AS new_stddev_nutrient\n  FROM organism_events\n  WHERE created_at >= NOW() - INTERVAL '1 hour'\n    AND meta_json->>'variant_id' IS NOT NULL\n  GROUP BY meta_json->>'variant_id'\n)\nUPDATE organism_variant_lineage vl\nSET\n  sample_size = vl.sample_size + vs.new_samples,\n  lifetime_nutrient_usd = vl.lifetime_nutrient_usd + vs.new_nutrient,\n  nutrient_mean = (\n    SELECT AVG(nutrient_usd)\n    FROM organism_events\n    WHERE meta_json->>'variant_id' = vl.variant_id\n  ),\n  nutrient_stddev = (\n    SELECT STDDEV(nutrient_usd)\n    FROM organism_events\n    WHERE meta_json->>'variant_id' = vl.variant_id\n  ),\n  fitness_score = (\n    SELECT AVG(nutrient_usd) / (1 + COALESCE(STDDEV(nutrient_usd), 0))\n    FROM organism_events\n    WHERE meta_json->>'variant_id' = vl.variant_id\n  ),\n  updated_at = NOW()\nFROM variant_stats vs\nWHERE vl.variant_id = vs.variant_id\nRETURNING vl.variant_id, vl.sample_size, vl.fitness_score;",
+        "additionalFields": {}
+      },
+      "id": "postgres-update-variant-stats",
+      "name": "S04: Update Variant Fitness Scores",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [1120, 300],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-main",
+          "name": "PostgreSQL Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Update shadow deployment stats\nWITH variant_stats AS (\n  SELECT\n    meta_json->>'variant_id' AS variant_id,\n    COUNT(*) AS new_samples,\n    SUM(nutrient_usd) AS new_nutrient\n  FROM organism_events\n  WHERE created_at >= NOW() - INTERVAL '1 hour'\n    AND meta_json->>'variant_id' IS NOT NULL\n  GROUP BY meta_json->>'variant_id'\n)\nUPDATE organism_shadow_deployments sd\nSET\n  sample_size = sd.sample_size + vs.new_samples,\n  nutrient_observed = sd.nutrient_observed + vs.new_nutrient,\n  updated_at = NOW()\nFROM variant_stats vs\nWHERE sd.variant_id = vs.variant_id\n  AND sd.conclusion IS NULL\nRETURNING sd.deployment_id, sd.sample_size, sd.nutrient_observed;",
+        "additionalFields": {}
+      },
+      "id": "postgres-update-shadow-stats",
+      "name": "S05: Update Shadow Deployment Stats",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [1340, 300],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-main",
+          "name": "PostgreSQL Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Select thick paths (top nutrient tendrils in last 7 days)\nWITH recent_nutrient AS (\n  SELECT\n    tendril_key,\n    SUM(nutrient_usd) AS nutrient_7d,\n    COUNT(*) AS events_7d\n  FROM organism_events\n  WHERE created_at >= NOW() - INTERVAL '7 days'\n  GROUP BY tendril_key\n)\nSELECT\n  t.tendril_key,\n  t.pheromone_weight,\n  rn.nutrient_7d,\n  rn.events_7d,\n  t.current_variant_id,\n  t.evolutionary_mode\nFROM tendrils t\nJOIN recent_nutrient rn ON t.tendril_key = rn.tendril_key\nWHERE t.status = 'active'\n  AND rn.nutrient_7d > 0\nORDER BY rn.nutrient_7d DESC\nLIMIT 3;",
+        "additionalFields": {}
+      },
+      "id": "postgres-select-thick-paths",
+      "name": "S06: Select Thick Paths (Top 3)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [1560, 300],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-main",
+          "name": "PostgreSQL Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Queue actions for thick paths\nconst items = $input.all();\n\nconst actions = items.map((item, idx) => {\n  const data = item.json;\n  \n  return {\n    action_type: 'allocate_attention',\n    tendril_key: data.tendril_key,\n    priority: Math.max(0, 100 - idx * 10),\n    variant_id: data.current_variant_id || null,\n    payload_json: {\n      reason: 'Top nutrient path in last 7d',\n      nutrient_7d: data.nutrient_7d,\n      events_7d: data.events_7d,\n      pheromone_weight: data.pheromone_weight,\n      evolutionary_mode: data.evolutionary_mode\n    }\n  };\n});\n\nreturn actions.map(a => ({ json: a }));"
+      },
+      "id": "code-queue-actions",
+      "name": "S07: Queue Actions for Thick Paths",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1780, 300]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "schema": {
+          "__rl": true,
+          "value": "public",
+          "mode": "list"
+        },
+        "table": {
+          "__rl": true,
+          "value": "organism_actions",
+          "mode": "list"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "tenant_id": "default",
+            "action_type": "={{ $json.action_type }}",
+            "tendril_key": "={{ $json.tendril_key }}",
+            "priority": "={{ $json.priority }}",
+            "status": "queued",
+            "payload_json": "={{ JSON.stringify($json.payload_json) }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "postgres-insert-actions",
+      "name": "S08: Insert Actions to Queue",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [2000, 300],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-main",
+          "name": "PostgreSQL Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Apply global decay to all tendrils\nUPDATE tendrils\nSET\n  pheromone_weight = GREATEST(0.05, pheromone_weight * 0.95),\n  updated_at = NOW()\nWHERE status = 'active'\n  AND last_reinforcement_at < NOW() - INTERVAL '1 hour';",
+        "additionalFields": {}
+      },
+      "id": "postgres-apply-global-decay",
+      "name": "S09: Apply Global Decay",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [2220, 300],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-main",
+          "name": "PostgreSQL Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Emit summary\nconst rollup = $input.first().json;\nconst thickPaths = $input.all().slice(0, 3);\n\nconst summary = {\n  run_timestamp: new Date().toISOString(),\n  tendrils_reinforced: rollup.length || 0,\n  variants_updated: rollup.filter(r => r.variant_id).length || 0,\n  thick_paths_selected: thickPaths.length,\n  top_tendril: thickPaths[0]?.tendril_key || 'none',\n  top_nutrient_7d: thickPaths[0]?.nutrient_7d || 0\n};\n\nconsole.log('🧠 Organism brain cycle complete:', JSON.stringify(summary, null, 2));\n\nreturn { json: summary };"
+      },
+      "id": "code-emit-summary",
+      "name": "S10: Emit Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2440, 300]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger (Hourly)": {
+      "main": [
+        [
+          {
+            "node": "S01: Rollup Nutrient (Last Hour)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "S01: Rollup Nutrient (Last Hour)": {
+      "main": [
+        [
+          {
+            "node": "S02: Compute Reinforcement",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "S02: Compute Reinforcement": {
+      "main": [
+        [
+          {
+            "node": "S03: Update Pheromone Weights",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "S03: Update Pheromone Weights": {
+      "main": [
+        [
+          {
+            "node": "S04: Update Variant Fitness Scores",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "S04: Update Variant Fitness Scores": {
+      "main": [
+        [
+          {
+            "node": "S05: Update Shadow Deployment Stats",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "S05: Update Shadow Deployment Stats": {
+      "main": [
+        [
+          {
+            "node": "S06: Select Thick Paths (Top 3)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "S06: Select Thick Paths (Top 3)": {
+      "main": [
+        [
+          {
+            "node": "S07: Queue Actions for Thick Paths",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "S07: Queue Actions for Thick Paths": {
+      "main": [
+        [
+          {
+            "node": "S08: Insert Actions to Queue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "S08: Insert Actions to Queue": {
+      "main": [
+        [
+          {
+            "node": "S09: Apply Global Decay",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "S09: Apply Global Decay": {
+      "main": [
+        [
+          {
+            "node": "S10: Emit Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2026-01-12T00:00:00.000Z",
+  "versionId": "0.1.2"
+}
